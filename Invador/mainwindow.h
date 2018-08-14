@@ -30,8 +30,7 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
-
-    std::map<__u32, ByNetDev> m_devs;
+    BYNetEngine m_engine;
 };
 
 #endif // MAINWINDOW_H

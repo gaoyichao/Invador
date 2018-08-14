@@ -10,6 +10,19 @@
 
 #include <ByNetInterface.h>
 
+/**
+ * @ingroup attr
+ * Iterate over a stream of nested attributes
+ * @arg pos	loop counter, set to current attribute
+ * @arg nla	attribute containing the nested attributes
+ * @arg rem	initialized to len, holds bytes currently remaining in stream
+ */
+#define nla_for_each_nested_attr(pos, nla, rem) \
+    for (pos = (struct nlattr *)nla_data(nla), rem = nla_len(nla); \
+         nla_ok(pos, rem); \
+         pos = nla_next(pos, &(rem)))
+
+
 class ByNetDev
 {
 public:

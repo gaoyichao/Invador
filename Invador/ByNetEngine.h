@@ -14,6 +14,7 @@
 #include <map>
 
 #include <ByNetDev.h>
+#include <ByNetInterface.h>
 
 class BYNetEngine;
 
@@ -24,6 +25,9 @@ typedef int (*ByNetHandlerPtr)(struct nl_msg *, void *);
  */
 typedef int (*ByNetHandler)(BYNetEngine *, struct nl_msg *, void *);
 
+/*
+ * ByNetEngine
+ */
 class BYNetEngine
 {
 public:
@@ -38,6 +42,26 @@ private:
 
     signed long long m_devidx;
     enum command_identify_by m_cidby;
+
+public:
+    std::map<__u32, ByNetDev> & GetDevs() { return m_devs; }
+    std::map<__u32, ByNetDev> const & GetDevs() const { return m_devs; }
+    void ClearDevs() { m_devs.clear(); }
+
+    ByNetInterface * FindMonitorInterface();
+    std::map<__u32, ByNetDev> & UpdateDevs();
+private:
+    std::map<__u32, ByNetDev> m_devs;
 };
 
+int print_iface_handler(struct nl_msg *msg, void *arg);
+int print_feature_handler(struct nl_msg *msg, void *arg);
+int print_phy_handler(struct nl_msg *msg, void *arg);
+
+int handle_dev_dump(BYNetEngine *engine, struct nl_msg *msg, void *arg);
+int handle_feature(BYNetEngine *engine, struct nl_msg *msg, void *arg);
+int handle_info(BYNetEngine *engine, struct nl_msg *msg, void *arg);
+int handle_interface_add(BYNetEngine *engine, struct nl_msg *msg, void *arg);
+
 #endif // BYNETENGINE_H
+

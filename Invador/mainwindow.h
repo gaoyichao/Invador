@@ -4,6 +4,11 @@
 #include <QMainWindow>
 #include <QStandardItemModel>
 
+#include <ByNetEngine.h>
+#include <ByNetDev.h>
+
+#include <map>
+
 namespace Ui {
 class MainWindow;
 }
@@ -21,9 +26,12 @@ private slots:
 
     void on_mDevPushButton_2_clicked();
 
+    void on_mDevPushButton_3_clicked();
+
 private:
     Ui::MainWindow *ui;
-    QStandardItemModel *m_devs;
+
+    std::map<__u32, ByNetDev> m_devs;
 };
 
 #endif // MAINWINDOW_H

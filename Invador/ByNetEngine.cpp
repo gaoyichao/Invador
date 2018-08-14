@@ -64,6 +64,8 @@ BYNetEngine::BYNetEngine()
         nl_socket_free(m_nlstate.nl_sock);
         throw "nl80211 not found";
     }
+
+    m_cidby = CIB_NONE;
 }
 /*
  * BYNetEngine析构函数
@@ -76,12 +78,27 @@ BYNetEngine::~BYNetEngine()
 #include <iostream>
 int BYNetEngine::handle_cmd(int nlm, enum nl80211_commands cmd, ByNetHandler handler, void *arg)
 {
+    int err;
     struct nl_msg *msg = nlmsg_alloc();
     struct nl_cb *cb = nl_cb_alloc(NL_CB_DEFAULT);
 
     genlmsg_put(msg, 0, 0, m_nlstate.nl80211_id, 0, nlm, cmd, 0);
 
-    int err = handler(this, msg, arg);
+    switch (m_cidby) {
+    case CIB_PHY:
+        NLA_PUT_U32(msg, NL80211_ATTR_WIPHY, m_devidx);
+        break;
+    case CIB_NETDEV:
+        NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, m_devidx);
+        break;
+    case CIB_WDEV:
+        NLA_PUT_U64(msg, NL80211_ATTR_WDEV, m_devidx);
+        break;
+    default:
+        break;
+    }
+
+    err = handler(this, msg, arg);
     if (err)
         goto out;
 
@@ -98,8 +115,19 @@ int BYNetEngine::handle_cmd(int nlm, enum nl80211_commands cmd, ByNetHandler han
     while (err > 0)
         nl_recvmsgs(m_nlstate.nl_sock, cb);
 
+    m_cidby = CIB_NONE;
 out:
     nl_cb_put(cb);
     nlmsg_free(msg);
     return err;
+
+nla_put_failure:
+    std::cerr << "building message failed" << std::endl;
+    return 2;
+}
+
+void BYNetEngine::prepare(enum command_identify_by cidby, signed long long devidx)
+{
+    m_cidby = cidby;
+    m_devidx = devidx;
 }

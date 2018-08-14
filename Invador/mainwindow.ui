@@ -19,43 +19,43 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <widget class="QTreeView" name="treeView">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>10</y>
-      <width>741</width>
-      <height>471</height>
-     </rect>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">boarder: 1px solid gray</string>
-    </property>
-   </widget>
    <widget class="QPushButton" name="mDevPushButton">
     <property name="geometry">
      <rect>
-      <x>60</x>
-      <y>490</y>
-      <width>91</width>
+      <x>50</x>
+      <y>50</y>
+      <width>131</width>
       <height>41</height>
      </rect>
     </property>
     <property name="text">
-     <string>设备列表</string>
+     <string>刷新设备列表</string>
     </property>
    </widget>
    <widget class="QPushButton" name="mDevPushButton_2">
     <property name="geometry">
      <rect>
-      <x>210</x>
-      <y>490</y>
+      <x>50</x>
+      <y>120</y>
       <width>91</width>
       <height>41</height>
      </rect>
     </property>
     <property name="text">
-     <string>设备列表</string>
+     <string>设备属性</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="mDevPushButton_3">
+    <property name="geometry">
+     <rect>
+      <x>50</x>
+      <y>180</y>
+      <width>131</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>添加监听接口</string>
     </property>
    </widget>
   </widget>

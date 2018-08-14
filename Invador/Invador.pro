@@ -17,7 +17,9 @@ LIBS += -lnl-genl-3 -lnl-3
 SOURCES += main.cpp\
         mainwindow.cpp \
     ByNetEngine.cpp \
-    utils.cpp
+    utils.cpp \
+    ByNetDev.cpp \
+    ByNetInterface.cpp
 
 
 HEADERS  += mainwindow.h \
@@ -25,6 +27,8 @@ HEADERS  += mainwindow.h \
     iw/iw.h \
     iw/nl80211.h \
     iw/handle.h \
-    ByNetEngine.h
+    ByNetEngine.h \
+    ByNetDev.h \
+    ByNetInterface.h
 
 FORMS    += mainwindow.ui

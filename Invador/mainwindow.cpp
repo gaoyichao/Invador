@@ -4,9 +4,12 @@
 #include <QStandardItem>
 
 #include <ByNetEngine.h>
+#include <ByNetDev.h>
 
 #include <iostream>
 #include <thread>
+#include <map>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +18,80 @@ BYNetEngine engine;
 
 int print_iface_handler(struct nl_msg *msg, void *arg)
 {
+    struct genlmsghdr *gnlh = (struct genlmsghdr*)nlmsg_data(nlmsg_hdr(msg));
+    struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
+    std::map<__u32, ByNetDev> *devs = (std::map<__u32, ByNetDev> *)arg;
+
+    nla_parse(tb_msg, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
+
+    ByNetDev *dev;
+    if (tb_msg[NL80211_ATTR_WIPHY]) {
+        __u32 phyid = nla_get_u32(tb_msg[NL80211_ATTR_WIPHY]);
+        auto it = devs->find(phyid);
+        if (it != devs->end()) {
+            dev = &(it->second);
+        } else {
+            (*devs)[phyid] = ByNetDev();
+            dev = &((*devs)[phyid]);
+        }
+        dev->SetPhyIndex(phyid);
+    } else {
+        return NL_SKIP;
+    }
+
+    ByNetInterface *interface;
+    if (tb_msg[NL80211_ATTR_IFINDEX]) {
+        __u32 ifidx = nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]);
+        interface = dev->GetInterface(ifidx);
+        if (NULL == interface)
+            interface = dev->AddInterface(ifidx);
+        interface->SetIfIndex(ifidx);
+    } else {
+        return NL_SKIP;
+    }
+
+
+    if (tb_msg[NL80211_ATTR_IFNAME]) {
+        interface->SetIfName(nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
+    } else {
+        return NL_SKIP;
+    }
+
+    if (tb_msg[NL80211_ATTR_WDEV])
+        interface->SetWDev(nla_get_u64(tb_msg[NL80211_ATTR_WDEV]));
+
+    if (tb_msg[NL80211_ATTR_MAC])
+        interface->SetMac((uint8_t*)nla_data(tb_msg[NL80211_ATTR_MAC]));
+
+    if (tb_msg[NL80211_ATTR_SSID])
+        interface->SetSSID((uint8_t*)nla_data(tb_msg[NL80211_ATTR_SSID]), nla_len(tb_msg[NL80211_ATTR_SSID]));
+
+    if (tb_msg[NL80211_ATTR_IFTYPE])
+        interface->SetIfType((enum nl80211_iftype)nla_get_u32(tb_msg[NL80211_ATTR_IFTYPE]));
+
+    if (tb_msg[NL80211_ATTR_WIPHY_FREQ]) {
+        interface->SetFreq(nla_get_u32(tb_msg[NL80211_ATTR_WIPHY_FREQ]));
+        if (tb_msg[NL80211_ATTR_CHANNEL_WIDTH])
+            interface->SetChannelWidth((enum nl80211_chan_width)nla_get_u32(tb_msg[NL80211_ATTR_CHANNEL_WIDTH]));
+
+        if (tb_msg[NL80211_ATTR_CENTER_FREQ1])
+            interface->SetCenterFreq1(nla_get_u32(tb_msg[NL80211_ATTR_CENTER_FREQ1]));
+
+        if (tb_msg[NL80211_ATTR_CENTER_FREQ2])
+            interface->SetCenterFreq2(nla_get_u32(tb_msg[NL80211_ATTR_CENTER_FREQ2]));
+    }
+
+    if (tb_msg[NL80211_ATTR_WIPHY_TX_POWER_LEVEL])
+        interface->SetTxPowerLevel(nla_get_u32(tb_msg[NL80211_ATTR_WIPHY_TX_POWER_LEVEL]));
+
+    return NL_SKIP;
+}
+
+/*
+int print_iface_handler(struct nl_msg *msg, void *arg)
+{
+    std::cout << ">>> iface" << std::endl;
+
     struct genlmsghdr *gnlh = (struct genlmsghdr*)nlmsg_data(nlmsg_hdr(msg));
     struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
     QStandardItemModel *model = (QStandardItemModel*)arg;
@@ -133,6 +210,7 @@ int print_iface_handler(struct nl_msg *msg, void *arg)
 
     return NL_SKIP;
 }
+*/
 
 static bool nl80211_has_split_wiphy = false;
 int print_feature_handler(struct nl_msg *msg, void *arg)
@@ -151,170 +229,116 @@ int print_feature_handler(struct nl_msg *msg, void *arg)
 
     return NL_SKIP;
 }
+/**
+ * @ingroup attr
+ * Iterate over a stream of nested attributes
+ * @arg pos	loop counter, set to current attribute
+ * @arg nla	attribute containing the nested attributes
+ * @arg rem	initialized to len, holds bytes currently remaining in stream
+ */
+#define nla_for_each_nested_attr(pos, nla, rem) \
+    for (pos = (struct nlattr *)nla_data(nla), rem = nla_len(nla); \
+         nla_ok(pos, rem); \
+         pos = nla_next(pos, &(rem)))
 
 int _i = 0;
 int print_phy_handler(struct nl_msg *msg, void *arg)
 {
     std::cout << ">>> haha:" << _i << std::endl;
     _i++;
-
-    struct genlmsghdr *gnlh = (struct genlmsghdr*)nlmsg_data(nlmsg_hdr(msg));
-    struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
-
-    struct nlattr *tb_band[NL80211_BAND_ATTR_MAX + 1];
-
-    struct nlattr *tb_freq[NL80211_FREQUENCY_ATTR_MAX + 1];
-    struct nla_policy freq_policy[NL80211_FREQUENCY_ATTR_MAX + 1];
-    freq_policy[NL80211_FREQUENCY_ATTR_FREQ].type = NLA_U32;
-    freq_policy[NL80211_FREQUENCY_ATTR_DISABLED].type = NLA_FLAG;
-    freq_policy[NL80211_FREQUENCY_ATTR_NO_IR].type = NLA_FLAG;
-    freq_policy[__NL80211_FREQUENCY_ATTR_NO_IBSS].type = NLA_FLAG;
-    freq_policy[NL80211_FREQUENCY_ATTR_RADAR].type = NLA_FLAG;
-    freq_policy[NL80211_FREQUENCY_ATTR_MAX_TX_POWER].type = NLA_U32;
-
-    struct nlattr *tb_rate[NL80211_BITRATE_ATTR_MAX + 1];
-    struct nla_policy rate_policy[NL80211_BITRATE_ATTR_MAX + 1];
-    rate_policy[NL80211_BITRATE_ATTR_RATE].type = NLA_U32;
-    rate_policy[NL80211_BITRATE_ATTR_2GHZ_SHORTPREAMBLE].type = NLA_FLAG;
-
-    struct nlattr *nl_band;
-    struct nlattr *nl_freq;
-    struct nlattr *nl_rate;
-    struct nlattr *nl_mode;
-    struct nlattr *nl_cmd;
-    struct nlattr *nl_if, *nl_ftype;
-    int rem_band, rem_freq, rem_rate, rem_mode, rem_cmd, rem_ftype, rem_if;
-    int open;
-
     /*
      * static variables only work here, other applications need to use the
      * callback pointer and store them there so they can be multithreaded
      * and/or have multiple netlink sockets, etc.
      */
     static int64_t phy_id = -1;
-    static int last_band = -1;
-    static bool band_had_freq = false;
-    bool print_name = true;
 
-    nla_parse(tb_msg, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0),
-          genlmsg_attrlen(gnlh, 0), NULL);
 
-    QStandardItem *itemProject = (QStandardItem*)arg;
+    struct genlmsghdr *gnlh = (struct genlmsghdr*)nlmsg_data(nlmsg_hdr(msg));
+    struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
+    nla_parse(tb_msg, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
 
+    std::map<__u32, ByNetDev> *devs = (std::map<__u32, ByNetDev> *)arg;
+    ByNetDev *dev;
     if (tb_msg[NL80211_ATTR_WIPHY]) {
-        if (nla_get_u32(tb_msg[NL80211_ATTR_WIPHY]) == phy_id)
-            print_name = false;
-        else
-            last_band = -1;
         phy_id = nla_get_u32(tb_msg[NL80211_ATTR_WIPHY]);
-    }
-    if (print_name && tb_msg[NL80211_ATTR_WIPHY_NAME]) {
-        itemProject->setText(QString(nla_get_string(tb_msg[NL80211_ATTR_WIPHY_NAME])));
-    }
-
-    if (tb_msg[NL80211_ATTR_MAX_NUM_SCAN_SSIDS]) {
-        QStandardItem *itemChild = new QStandardItem("SSID最大扫描数量");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(nla_get_u8(tb_msg[NL80211_ATTR_MAX_NUM_SCAN_SSIDS]))));
-    }
-
-    if (tb_msg[NL80211_ATTR_MAX_NUM_SCHED_SCAN_SSIDS]) {
-        QStandardItem *itemChild = new QStandardItem("SSID最大扫描数量(scheduled)");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(nla_get_u8(tb_msg[NL80211_ATTR_MAX_NUM_SCHED_SCAN_SSIDS]))));
-    }
-
-    if (tb_msg[NL80211_ATTR_MAX_SCAN_IE_LEN]) {
-        QStandardItem *itemChild = new QStandardItem("IEs最大扫描字节数量");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(nla_get_u16(tb_msg[NL80211_ATTR_MAX_SCAN_IE_LEN]))));
-    }
-
-    if (tb_msg[NL80211_ATTR_MAX_MATCH_SETS]) {
-        QStandardItem *itemChild = new QStandardItem("max # match sets");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(nla_get_u16(tb_msg[NL80211_ATTR_MAX_MATCH_SETS]))));
-    }
-
-    if (tb_msg[NL80211_ATTR_MAX_NUM_SCHED_SCAN_PLANS]) {
-        QStandardItem *itemChild = new QStandardItem("max # scan plans");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(nla_get_u32(tb_msg[NL80211_ATTR_MAX_NUM_SCHED_SCAN_PLANS]))));
-    }
-
-    if (tb_msg[NL80211_ATTR_MAX_SCAN_PLAN_INTERVAL]) {
-        QStandardItem *itemChild = new QStandardItem("max scan plan interval");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number((int)nla_get_u32(tb_msg[NL80211_ATTR_MAX_SCAN_PLAN_INTERVAL]))));
-    }
-
-    if (tb_msg[NL80211_ATTR_MAX_SCAN_PLAN_ITERATIONS]) {
-        QStandardItem *itemChild = new QStandardItem("max scan plan iterations");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(nla_get_u32(tb_msg[NL80211_ATTR_MAX_SCAN_PLAN_ITERATIONS]))));
-    }
-
-    if (tb_msg[NL80211_ATTR_WIPHY_FRAG_THRESHOLD]) {
-        unsigned int frag = nla_get_u32(tb_msg[NL80211_ATTR_WIPHY_FRAG_THRESHOLD]);
-        if (frag != (unsigned int)-1) {
-            QStandardItem *itemChild = new QStandardItem("Fragmentation阈值");
-            itemProject->appendRow(itemChild);
-            itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(frag)));
+        auto it = devs->find(phy_id);
+        if (it != devs->end()) {
+            dev = &(it->second);
+        } else {
+            (*devs)[phy_id] = ByNetDev();
+            dev = &((*devs)[phy_id]);
         }
+        dev->SetPhyIndex(phy_id);
+    } else {
+        return NL_SKIP;
     }
 
-    if (tb_msg[NL80211_ATTR_WIPHY_RTS_THRESHOLD]) {
-        unsigned int rts = nla_get_u32(tb_msg[NL80211_ATTR_WIPHY_RTS_THRESHOLD]);
-        if (rts != (unsigned int)-1) {
-            QStandardItem *itemChild = new QStandardItem("RTS阈值");
-            itemProject->appendRow(itemChild);
-            itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(rts)));
-        }
-    }
+    if (tb_msg[NL80211_ATTR_WIPHY_NAME])
+        dev->SetPhyName(nla_get_string(tb_msg[NL80211_ATTR_WIPHY_NAME]));
+
+    if (tb_msg[NL80211_ATTR_MAX_NUM_SCAN_SSIDS])
+        dev->SetMaxNumScanSSID(nla_get_u8(tb_msg[NL80211_ATTR_MAX_NUM_SCAN_SSIDS]));
+
+    if (tb_msg[NL80211_ATTR_MAX_NUM_SCHED_SCAN_SSIDS])
+        dev->SetMaxNumSchedScanSsid(nla_get_u8(tb_msg[NL80211_ATTR_MAX_NUM_SCHED_SCAN_SSIDS]));
+
+    if (tb_msg[NL80211_ATTR_MAX_SCAN_IE_LEN])
+        dev->SetMaxScanIELen(nla_get_u16(tb_msg[NL80211_ATTR_MAX_SCAN_IE_LEN]));
+
+    if (tb_msg[NL80211_ATTR_MAX_MATCH_SETS])
+        dev->SetMaxMatchSets(nla_get_u16(tb_msg[NL80211_ATTR_MAX_MATCH_SETS]));
+
+    if (tb_msg[NL80211_ATTR_MAX_NUM_SCHED_SCAN_PLANS])
+        dev->SetMaxNumSchedScanPlans(nla_get_u32(tb_msg[NL80211_ATTR_MAX_NUM_SCHED_SCAN_PLANS]));
+
+    if (tb_msg[NL80211_ATTR_MAX_SCAN_PLAN_INTERVAL])
+        dev->SetMaxScanPlanInterval((int)nla_get_u32(tb_msg[NL80211_ATTR_MAX_SCAN_PLAN_INTERVAL]));
+
+    if (tb_msg[NL80211_ATTR_MAX_SCAN_PLAN_ITERATIONS])
+        dev->SetMaxScanPlanIterations(nla_get_u32(tb_msg[NL80211_ATTR_MAX_SCAN_PLAN_ITERATIONS]));
+
+    if (tb_msg[NL80211_ATTR_WIPHY_FRAG_THRESHOLD])
+        dev->SetPhyFragThreshold(nla_get_u32(tb_msg[NL80211_ATTR_WIPHY_FRAG_THRESHOLD]));
+
+    if (tb_msg[NL80211_ATTR_WIPHY_RTS_THRESHOLD])
+        dev->SetPhyRtsThreshold(nla_get_u32(tb_msg[NL80211_ATTR_WIPHY_RTS_THRESHOLD]));
 
     if (tb_msg[NL80211_ATTR_WIPHY_RETRY_SHORT] || tb_msg[NL80211_ATTR_WIPHY_RETRY_LONG]) {
-        unsigned char retry_short = 0, retry_long = 0;
-
-        if (tb_msg[NL80211_ATTR_WIPHY_RETRY_SHORT])
-            retry_short = nla_get_u8(tb_msg[NL80211_ATTR_WIPHY_RETRY_SHORT]);
-        if (tb_msg[NL80211_ATTR_WIPHY_RETRY_LONG])
-            retry_long = nla_get_u8(tb_msg[NL80211_ATTR_WIPHY_RETRY_LONG]);
-        if (retry_short == retry_long) {
-            QStandardItem *itemChild = new QStandardItem("Retry short long limit");
-            itemProject->appendRow(itemChild);
-            itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(retry_short)));
-        } else {
-            QStandardItem *itemChild = new QStandardItem("Retry short limit");
-            itemProject->appendRow(itemChild);
-            itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(retry_short)));
-
-            itemChild = new QStandardItem("Retry long limit");
-            itemProject->appendRow(itemChild);
-            itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(retry_long)));
-        }
+        dev->SetRetryShort(nla_get_u8(tb_msg[NL80211_ATTR_WIPHY_RETRY_SHORT]));
+        dev->SetRetryLong(nla_get_u8(tb_msg[NL80211_ATTR_WIPHY_RETRY_LONG]));
     }
 
-    if (tb_msg[NL80211_ATTR_WIPHY_COVERAGE_CLASS]) {
-        unsigned char coverage = nla_get_u8(tb_msg[NL80211_ATTR_WIPHY_COVERAGE_CLASS]);
-        /* See handle_distance() for an explanation where the '450' comes from */
-        QStandardItem *itemChild = new QStandardItem("覆盖等级");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(coverage) + " (up to " + QString::number(450*coverage) + "m)"));
-    }
+    if (tb_msg[NL80211_ATTR_WIPHY_COVERAGE_CLASS])
+        dev->SetCoverageClass(nla_get_u8(tb_msg[NL80211_ATTR_WIPHY_COVERAGE_CLASS]));
 
     if (tb_msg[NL80211_ATTR_CIPHER_SUITES]) {
         int num = nla_len(tb_msg[NL80211_ATTR_CIPHER_SUITES]) / sizeof(__u32);
         __u32 *ciphers = (__u32 *)nla_data(tb_msg[NL80211_ATTR_CIPHER_SUITES]);
-        if (num > 0) {
-            QStandardItem *itemChild = new QStandardItem("支持密码类型");
-            itemProject->appendRow(itemChild);
-            for(int i = 0; i < num; i++) {
-                QStandardItem *tmpitem = new QStandardItem(cipher_name(ciphers[i]));
-                itemChild->appendRow(tmpitem);
-            }
-        }
+        dev->SetSupportedCiphers(ciphers, num);
     }
 
+    struct nlattr *nl_mode;
+    int rem_mode;
+    if (tb_msg[NL80211_ATTR_SUPPORTED_IFTYPES]) {
+        dev->ClearSupportedIfType();
+        nla_for_each_nested_attr(nl_mode, tb_msg[NL80211_ATTR_SUPPORTED_IFTYPES], rem_mode)
+            dev->AddSupportedIfType((enum nl80211_iftype)nla_type(nl_mode));
+    }
+
+    if (tb_msg[NL80211_ATTR_SOFTWARE_IFTYPES]) {
+        dev->ClearSoftwareIfType();
+        nla_for_each_nested_attr(nl_mode, tb_msg[NL80211_ATTR_SOFTWARE_IFTYPES], rem_mode)
+            dev->AddSoftwareIfType((enum nl80211_iftype)nla_type(nl_mode));
+    }
+
+    struct nlattr *nl_cmd;
+    int rem_cmd;
+    if (tb_msg[NL80211_ATTR_SUPPORTED_COMMANDS]) {
+        dev->ClearSupportedCmd();
+        nla_for_each_nested_attr(nl_cmd, tb_msg[NL80211_ATTR_SUPPORTED_COMMANDS], rem_cmd)
+            dev->AddSupportedCmd((enum nl80211_commands)nla_get_u32(nl_cmd));
+    }
 
     return NL_SKIP;
 }
@@ -344,41 +368,92 @@ int handle_info(BYNetEngine *engine, struct nl_msg *msg, void *arg)
     return 0;
 }
 
+int handle_interface_add(BYNetEngine *engine, struct nl_msg *msg, void *arg)
+{
+    std::cout << ">>> add interface 0" << std::endl;
+    NLA_PUT_STRING(msg, NL80211_ATTR_IFNAME, "moni0");
+    NLA_PUT_U32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MONITOR);
+    return 0;
+nla_put_failure:
+    return -ENOBUFS;
+}
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
 
-    m_devs = new QStandardItemModel(ui->treeView);
-    ui->treeView->setModel(m_devs);
-    m_devs->setHorizontalHeaderLabels(QStringList() << QStringLiteral("项目名") << QStringLiteral("信息"));
+    m_devs.clear();
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
-    delete m_devs;
 }
 
 void MainWindow::on_mDevPushButton_clicked()
 {
-    engine.handle_cmd(NLM_F_DUMP, NL80211_CMD_GET_INTERFACE, handle_dev_dump, m_devs);
+    m_devs.clear();
+    engine.handle_cmd(NLM_F_DUMP, NL80211_CMD_GET_INTERFACE, handle_dev_dump, &m_devs);
+
     std::cout << ">>> " << std::endl;
-    int nrows = m_devs->rowCount();
-    QStandardItem *itemProject = m_devs->item(0);
-    std::cout << nrows << ":" << itemProject->rowCount() << std::endl;
-    std::cout << itemProject->text().toStdString() << ":" << m_devs->item(0, 1)->text().toStdString() << std::endl;
+    std::cout << ">>> num of devs:" << m_devs.size() << std::endl;
+    for (auto it = m_devs.begin(); it != m_devs.end(); it++) {
+        ByNetDev *dev = &(it->second);
+        auto interfaceMap = dev->GetAllInterfaces();
+        std::cout << ">>> num of interfaces:" << interfaceMap.size() << std::endl;
+        for (auto infit = interfaceMap.begin(); infit != interfaceMap.end(); infit++) {
+            std::cout << ">>> " << infit->second.GetIfName() << std::endl;
+        }
+    }
 }
 
 
 
 void MainWindow::on_mDevPushButton_2_clicked()
 {
-    QStandardItem *itemProject = new QStandardItem("Wiphy");
-    m_devs->appendRow(itemProject);
-    m_devs->setItem(m_devs->indexFromItem(itemProject).row(), 1, new QStandardItem("Wiphy"));
-
-    engine.handle_cmd(NLM_F_DUMP, NL80211_CMD_GET_WIPHY, handle_info, itemProject);
-    std::cout << ">>> m_devs:" << m_devs->rowCount() << std::endl;
+    engine.handle_cmd(NLM_F_DUMP, NL80211_CMD_GET_WIPHY, handle_info, &m_devs);
+    std::cout << ">>> " << std::endl;
+    std::cout << ">>> num of devs:" << m_devs.size() << std::endl;
+    for (auto it = m_devs.begin(); it != m_devs.end(); it++) {
+        ByNetDev *dev = &(it->second);
+        std::cout << ">>> # supported ciphers:" << dev->GetSupportedCiphers().size() << std::endl;
+        std::cout << ">>> # supported if types:" << dev->GetSupportedIfTypes().size() << std::endl;
+        std::cout << ">>> # cmd:" << dev->GetSupportedCmd().size() << std::endl;
+    }
 }
+
+void MainWindow::on_mDevPushButton_3_clicked()
+{
+    m_devs.clear();
+    engine.handle_cmd(NLM_F_DUMP, NL80211_CMD_GET_INTERFACE, handle_dev_dump, &m_devs);
+    ByNetInterface const *interface = NULL;
+    for (auto it = m_devs.begin(); it != m_devs.end(); it++) {
+        ByNetDev *dev = &(it->second);
+        interface = dev->FindMonitorInterface();
+        if (NULL != interface)
+            break;
+    }
+
+    if (NULL == interface) {
+        std::cout << ">>> add interface" << std::endl;
+        engine.prepare(CIB_PHY, 0);
+        engine.handle_cmd(0, NL80211_CMD_NEW_INTERFACE, handle_interface_add, NULL);
+
+        m_devs.clear();
+        engine.handle_cmd(NLM_F_DUMP, NL80211_CMD_GET_INTERFACE, handle_dev_dump, &m_devs);
+        for (auto it = m_devs.begin(); it != m_devs.end(); it++) {
+            ByNetDev *dev = &(it->second);
+            interface = dev->FindMonitorInterface();
+            if (NULL != interface)
+                break;
+        }
+    }
+
+    if (NULL != interface)
+        std::cout << ">>> monitor interface:" << interface->GetIfName() << std::endl;
+}
+
+
+

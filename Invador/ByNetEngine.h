@@ -11,6 +11,9 @@
 #include <iw.h>
 
 #include <string>
+#include <map>
+
+#include <ByNetDev.h>
 
 class BYNetEngine;
 
@@ -28,9 +31,13 @@ public:
     ~BYNetEngine();
 
 public:
+    void prepare(enum command_identify_by cidby, signed long long devidx);
     int handle_cmd(int nlm, enum nl80211_commands cmd, ByNetHandler handler, void *arg);
 private:
     struct nl80211_state m_nlstate;
+
+    signed long long m_devidx;
+    enum command_identify_by m_cidby;
 };
 
 #endif // BYNETENGINE_H

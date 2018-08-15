@@ -62,17 +62,33 @@ void MainWindow::on_mDevPushButton_2_clicked()
 
 void MainWindow::on_mDevPushButton_3_clicked()
 {
-    ByNetInterface const *interface = m_engine.FindMonitorInterface();
+    m_moninterface = m_engine.FindMonitorInterface();
 
-    if (NULL == interface) {
+    if (NULL == m_moninterface) {
         m_engine.prepare(CIB_PHY, 0);
         m_engine.handle_cmd(0, NL80211_CMD_NEW_INTERFACE, handle_interface_add, NULL);
     }
 
-    interface = m_engine.FindMonitorInterface();
-    if (NULL != interface)
-        std::cout << ">>> monitor interface:" << interface->GetIfName() << std::endl;
+    m_moninterface = m_engine.FindMonitorInterface();
+    if (NULL != m_moninterface) {
+        std::cout << ">>> monitor interface:" << m_moninterface->GetIfName() << std::endl;
+        std::cout << ">>> monitor interface id:" << m_moninterface->GetIfIndex() << std::endl;
+    }
 }
+
+void MainWindow::on_mDevPushButton_4_clicked()
+{
+    QString ifname = ui->lineEdit->text();
+    signed long long devidx = if_nametoindex(ifname.toStdString().c_str());
+    std::cout << "devidx:" << devidx << std::endl;
+
+    if (devidx < 0)
+        return;
+
+    m_engine.prepare(CIB_NETDEV, devidx);
+    m_engine.handle_cmd(0, NL80211_CMD_DEL_INTERFACE, handle_interface_del, NULL);
+}
+
 
 
 

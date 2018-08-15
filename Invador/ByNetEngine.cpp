@@ -230,19 +230,19 @@ int print_phy_handler(struct nl_msg *msg, void *arg)
     return NL_SKIP;
 }
 
-int handle_dev_dump(BYNetEngine *engine, struct nl_msg *msg, void *arg)
+int handle_dev_dump(ByNetEngine *engine, struct nl_msg *msg, void *arg)
 {
     register_handler(print_iface_handler, &(engine->GetDevs()));
     return 0;
 }
 
-int handle_feature(BYNetEngine *engine, struct nl_msg *msg, void *arg)
+int handle_feature(ByNetEngine *engine, struct nl_msg *msg, void *arg)
 {
     register_handler(print_feature_handler, NULL);
     return 0;
 }
 
-int handle_info(BYNetEngine *engine, struct nl_msg *msg, void *arg)
+int handle_info(ByNetEngine *engine, struct nl_msg *msg, void *arg)
 {
     engine->handle_cmd(0, NL80211_CMD_GET_PROTOCOL_FEATURES, handle_feature, NULL);
     if (nl80211_has_split_wiphy) {
@@ -255,7 +255,7 @@ int handle_info(BYNetEngine *engine, struct nl_msg *msg, void *arg)
     return 0;
 }
 
-int handle_interface_add(BYNetEngine *engine, struct nl_msg *msg, void *arg)
+int handle_interface_add(ByNetEngine *engine, struct nl_msg *msg, void *arg)
 {
     NLA_PUT_STRING(msg, NL80211_ATTR_IFNAME, "moni0");
     NLA_PUT_U32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MONITOR);
@@ -264,13 +264,18 @@ nla_put_failure:
     return -ENOBUFS;
 }
 
+int handle_interface_del(ByNetEngine *engine, struct nl_msg *msg, void *arg)
+{
+    return 0;
+}
+
 
 /**********************************************************************/
 
 /*
  * BYNetEngine默认构造函数
  */
-BYNetEngine::BYNetEngine()
+ByNetEngine::ByNetEngine()
 {
     m_nlstate.nl_sock = nl_socket_alloc();
     if (!m_nlstate.nl_sock)
@@ -294,13 +299,13 @@ BYNetEngine::BYNetEngine()
 /*
  * BYNetEngine析构函数
  */
-BYNetEngine::~BYNetEngine()
+ByNetEngine::~ByNetEngine()
 {
     nl_socket_free(m_nlstate.nl_sock);
 }
 
 #include <iostream>
-int BYNetEngine::handle_cmd(int nlm, enum nl80211_commands cmd, ByNetHandler handler, void *arg)
+int ByNetEngine::handle_cmd(int nlm, enum nl80211_commands cmd, ByNetHandler handler, void *arg)
 {
     int err;
     struct nl_msg *msg = nlmsg_alloc();
@@ -350,13 +355,13 @@ nla_put_failure:
     return 2;
 }
 
-void BYNetEngine::prepare(enum command_identify_by cidby, signed long long devidx)
+void ByNetEngine::prepare(enum command_identify_by cidby, signed long long devidx)
 {
     m_cidby = cidby;
     m_devidx = devidx;
 }
 
-std::map<__u32, ByNetDev> & BYNetEngine::UpdateDevs()
+std::map<__u32, ByNetDev> & ByNetEngine::UpdateDevs()
 {
     ClearDevs();
     handle_cmd(NLM_F_DUMP, NL80211_CMD_GET_INTERFACE, handle_dev_dump, NULL);
@@ -364,7 +369,7 @@ std::map<__u32, ByNetDev> & BYNetEngine::UpdateDevs()
     return GetDevs();
 }
 
-ByNetInterface * BYNetEngine::FindMonitorInterface()
+ByNetInterface * ByNetEngine::FindMonitorInterface()
 {
     ByNetInterface *interface = NULL;
 

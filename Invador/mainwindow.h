@@ -5,6 +5,7 @@
 #include <QStandardItemModel>
 
 #include <ByNetEngine.h>
+#include <ByNetInterface.h>
 #include <ByNetDev.h>
 
 #include <map>
@@ -28,9 +29,12 @@ private slots:
 
     void on_mDevPushButton_3_clicked();
 
+    void on_mDevPushButton_4_clicked();
+
 private:
     Ui::MainWindow *ui;
-    BYNetEngine m_engine;
+    ByNetEngine m_engine;
+    ByNetInterface *m_moninterface = NULL;
 };
 
 #endif // MAINWINDOW_H

@@ -1,6 +1,7 @@
 #ifndef BYNETENGINE_H
 #define BYNETENGINE_H
 
+#include <net/if.h>
 #include <netlink/genl/genl.h>
 #include <netlink/genl/family.h>
 #include <netlink/genl/ctrl.h>
@@ -16,23 +17,23 @@
 #include <ByNetDev.h>
 #include <ByNetInterface.h>
 
-class BYNetEngine;
+class ByNetEngine;
 
 typedef int (*ByNetHandlerPtr)(struct nl_msg *, void *);
 
 /*
  * ByNetHandler - 成功运行返回0,出错返回1
  */
-typedef int (*ByNetHandler)(BYNetEngine *, struct nl_msg *, void *);
+typedef int (*ByNetHandler)(ByNetEngine *, struct nl_msg *, void *);
 
 /*
  * ByNetEngine
  */
-class BYNetEngine
+class ByNetEngine
 {
 public:
-    BYNetEngine();
-    ~BYNetEngine();
+    ByNetEngine();
+    ~ByNetEngine();
 
 public:
     void prepare(enum command_identify_by cidby, signed long long devidx);
@@ -58,10 +59,11 @@ int print_iface_handler(struct nl_msg *msg, void *arg);
 int print_feature_handler(struct nl_msg *msg, void *arg);
 int print_phy_handler(struct nl_msg *msg, void *arg);
 
-int handle_dev_dump(BYNetEngine *engine, struct nl_msg *msg, void *arg);
-int handle_feature(BYNetEngine *engine, struct nl_msg *msg, void *arg);
-int handle_info(BYNetEngine *engine, struct nl_msg *msg, void *arg);
-int handle_interface_add(BYNetEngine *engine, struct nl_msg *msg, void *arg);
+int handle_dev_dump(ByNetEngine *engine, struct nl_msg *msg, void *arg);
+int handle_feature(ByNetEngine *engine, struct nl_msg *msg, void *arg);
+int handle_info(ByNetEngine *engine, struct nl_msg *msg, void *arg);
+int handle_interface_add(ByNetEngine *engine, struct nl_msg *msg, void *arg);
+int handle_interface_del(ByNetEngine *engine, struct nl_msg *msg, void *arg);
 
 #endif // BYNETENGINE_H
 

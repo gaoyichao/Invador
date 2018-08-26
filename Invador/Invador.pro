@@ -29,6 +29,7 @@ HEADERS  += mainwindow.h \
     iw/handle.h \
     ByNetEngine.h \
     ByNetDev.h \
-    ByNetInterface.h
+    ByNetInterface.h \
+    utils.h
 
 FORMS    += mainwindow.ui

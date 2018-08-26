@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 
 #include <QStandardItem>
+#include <QMessageBox>
 
 #include <ByNetEngine.h>
 #include <ByNetDev.h>
@@ -13,6 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <utils.h>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -88,6 +91,22 @@ void MainWindow::on_mDevPushButton_4_clicked()
     m_engine.prepare(CIB_NETDEV, devidx);
     m_engine.handle_cmd(0, NL80211_CMD_DEL_INTERFACE, handle_interface_del, NULL);
 }
+
+void MainWindow::on_mDevPushButton_5_clicked()
+{
+    m_moninterface = m_engine.FindMonitorInterface();
+    if (NULL == m_moninterface)
+        return;
+
+    //m_moninterface->open();
+    try {
+        m_moninterface->open();
+    } catch (const char *msg) {
+        QMessageBox::critical(this, "Error", msg);
+        exit(1);
+    }
+}
+
 
 
 

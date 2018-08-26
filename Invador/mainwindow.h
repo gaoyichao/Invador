@@ -31,6 +31,8 @@ private slots:
 
     void on_mDevPushButton_4_clicked();
 
+    void on_mDevPushButton_5_clicked();
+
 private:
     Ui::MainWindow *ui;
     ByNetEngine m_engine;

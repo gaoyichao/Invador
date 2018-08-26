@@ -7,18 +7,44 @@
 #include <string>
 #include <vector>
 
+enum driver_type {
+    DT_NULL = 0,
+    DT_WLANNG,
+    DT_HOSTAP,
+    DT_MADWIFI,
+    DT_MADWIFING,
+    DT_BCM43XX,
+    DT_ORINOCO,
+    DT_ZD1211RW,
+    DT_ACX,
+    DT_MAC80211_RT,
+    DT_AT76USB,
+    DT_IPW2200
+};
 
 class ByNetInterface
 {
 public:
     ByNetInterface();
+    ~ByNetInterface();
 
 public:
-    std::string const & GetIfName() const { return m_IfName; }
-    void SetIfName(std::string const & name) { m_IfName = name; }
+    int open();
+private:
+    void openraw(int fd, int *arptype);
+private:
+    int fd_in;
+    int fd_main;
+    int fd_out;
+    int arptype_out;
+    int arptype_in;
 
-    __u32 GetIfIndex() const { return m_IfIndex; }
-    void SetIfIndex(__u32 i) { m_IfIndex = i; }
+public:
+    std::string const & GetIfName() const { return m_ifname; }
+    void SetIfName(std::string const & name) { m_ifname = name; }
+
+    __u32 GetIfIndex() const { return m_ifindex; }
+    void SetIfIndex(__u32 i) { m_ifindex = i; }
 
     __u64 GetWDev() const { return m_wdev; }
     void SetWDev(__u64 wdev) { m_wdev = wdev; }
@@ -61,7 +87,7 @@ public:
     void SetTxPowerLevel(__u32 txpow) { m_txpow = txpow; }
 
 private:
-    __u32 m_IfIndex;
+    __u32 m_ifindex;
     __u32 m_freq;
     __u32 m_cfreq1;
     __u32 m_cfreq2;
@@ -79,8 +105,19 @@ private:
     enum nl80211_iftype m_IfType;
     enum nl80211_chan_width m_ChanWidth;
 
-    std::string m_IfName;
+    std::string m_ifname;
 
+public:
+    bool is_mac80211();
+    bool is_ipw2200();
+    bool is_bcm43xx();
+
+private:
+    const char *m_iwpriv;
+    const char *m_iwconfig;
+    const char *m_ifconfig;
+
+    enum driver_type m_drivertype;
 };
 
 #endif // BYNETINTERFACE_H

@@ -4,8 +4,14 @@
 #include <ByNetEngine.h>
 
 #include <thread>
-#include <stdio.h>
 
+#include <stdio.h>
+#include <dirent.h>
+#include <unistd.h>
+
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
 
 void print_ssid_escaped(const uint8_t len, const uint8_t *data)
 {
@@ -129,129 +135,114 @@ const char *cipher_name(__u32 c)
 }
 
 
+static const char *witoolspath[] = {
+    "/sbin",
+    "/usr/sbin",
+    "/usr/local/sbin",
+    "/bin",
+    "/usr/bin",
+    "/usr/local/bin",
+    "/tmp",
+};
+
+static const int g_num_witoolspath = sizeof(witoolspath) / sizeof(const char *);
+
 /*
-int print_iface_handler(struct nl_msg *msg, void *arg)
+ * is_ndiswrapper - 判定网卡接口是否为ndiswrapper
+ *
+ * NdisWrapper实际上是一个开源的驱动(从技术上讲,是内核的一个模块),
+ * 它能够让Linux使用标准的Windows XP下的无线网络驱动.
+ * 你可以认为NdisWrapper是Linux内核和Windows驱动之间的一个翻译层.
+ * Windows驱动可以通过 NdisWrapper的配置工具进行安装
+ *
+ * @iface: 网卡接口
+ * @path: iwpriv路径
+ */
+int is_ndiswrapper(const char *iface, const char *path)
 {
-    std::cout << ">>> iface" << std::endl;
+    int n, pid;
+    if (!path || !iface)
+        return 0;
 
-    struct genlmsghdr *gnlh = (struct genlmsghdr*)nlmsg_data(nlmsg_hdr(msg));
-    struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
-    QStandardItemModel *model = (QStandardItemModel*)arg;
-
-    nla_parse(tb_msg, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
-
-    QStandardItem *itemProject = new QStandardItem("Phy#");
-    if (tb_msg[NL80211_ATTR_WIPHY]) {
-        itemProject->setText(QString("Phy#") + QString::number(nla_get_u32(tb_msg[NL80211_ATTR_WIPHY])));
-        model->appendRow(itemProject);
-        model->setItem(model->indexFromItem(itemProject).row(), 1, new QStandardItem(QStringLiteral("无线网卡")));
-    } else {
-        return NL_SKIP;
+    if (0 == (pid = fork())) {
+        close(0);
+        close(1);
+        close(2);
+        chdir("/");
+        execl(path, "iwpriv", iface, "ndis_reset", NULL);
+        exit(1);
     }
 
-    if (tb_msg[NL80211_ATTR_IFNAME]) {
-        QStandardItem *itemChild = new QStandardItem("Interface");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(nla_get_string(tb_msg[NL80211_ATTR_IFNAME])));
-    }
-
-    if (tb_msg[NL80211_ATTR_IFINDEX]) {
-        QStandardItem *itemChild = new QStandardItem("ifindex");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]))));
-    }
-
-    if (tb_msg[NL80211_ATTR_WDEV]) {
-        QStandardItem *itemChild = new QStandardItem("wdev");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(nla_get_u64(tb_msg[NL80211_ATTR_WDEV]))));
-    }
-
-    if (tb_msg[NL80211_ATTR_MAC]) {
-        uint8_t *mac = (uint8_t*)nla_data(tb_msg[NL80211_ATTR_MAC]);
-        char macstr[18];
-        sprintf(macstr, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-        QStandardItem *itemChild = new QStandardItem("物理地址");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString(macstr)));
-    }
-
-    if (tb_msg[NL80211_ATTR_SSID]) {
-        int len = nla_len(tb_msg[NL80211_ATTR_SSID]);
-        len = (len < 32) ? len : 32;
-        uint8_t *ssid = (uint8_t*)nla_data(tb_msg[NL80211_ATTR_SSID]);
-        char ssidstr[128];
-
-        for (int i = 0; i < len; i++) {
-            if (isprint(ssid[i]) && ssid[i] != ' ' && ssid[i] != '\\')
-                sprintf(ssidstr, "%c", ssid[i]);
-            else if (ssid[i] == ' ' &&  (i != 0 && i != len -1))
-                sprintf(ssidstr, " ");
-            else
-                sprintf(ssidstr, "\\x%.2x", ssid[i]);
-        }
-        QStandardItem *itemChild = new QStandardItem("ssid");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString(ssidstr)));
-    }
-
-    if (tb_msg[NL80211_ATTR_IFTYPE]) {
-        enum nl80211_iftype type = (enum nl80211_iftype)nla_get_u32(tb_msg[NL80211_ATTR_IFTYPE]);
-
-        QStandardItem *itemChild = new QStandardItem("工作模式");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(iftype_name(type)));
-    }
-
-    if (tb_msg[NL80211_ATTR_WIPHY_FREQ]) {
-        uint32_t freq = nla_get_u32(tb_msg[NL80211_ATTR_WIPHY_FREQ]);
-        int channel = ieee80211_frequency_to_channel(freq);
-
-        QStandardItem *itemChild = new QStandardItem("频道");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(channel)));
-
-        itemChild = new QStandardItem("频率");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(freq) + " MHz"));
-
-        if (tb_msg[NL80211_ATTR_CHANNEL_WIDTH]) {
-            itemChild = new QStandardItem("带宽");
-            itemProject->appendRow(itemChild);
-            itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(channel_width_name((enum nl80211_chan_width)nla_get_u32(tb_msg[NL80211_ATTR_CHANNEL_WIDTH]))));
-        }
-
-        if (tb_msg[NL80211_ATTR_CENTER_FREQ1]) {
-            uint32_t cfreq1 = nla_get_u32(tb_msg[NL80211_ATTR_CENTER_FREQ1]);
-            itemChild = new QStandardItem("Freq Center 1");
-            itemProject->appendRow(itemChild);
-            itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(cfreq1) + " MHz"));
-        }
-
-        if (tb_msg[NL80211_ATTR_CENTER_FREQ2]) {
-            uint32_t cfreq2 = nla_get_u32(tb_msg[NL80211_ATTR_CENTER_FREQ2]);
-            itemChild = new QStandardItem("Freq Center 2");
-            itemProject->appendRow(itemChild);
-            itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(cfreq2) + " MHz"));
-        }
-    }
-
-    if (tb_msg[NL80211_ATTR_WIPHY_TX_POWER_LEVEL]) {
-        uint32_t txpow = nla_get_u32(tb_msg[NL80211_ATTR_WIPHY_TX_POWER_LEVEL]);
-        QStandardItem *itemChild = new QStandardItem("txpower");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(txpow / 100)+"."+QString::number(txpow % 100)+" dBm"));
-    }
-
-    if (tb_msg[NL80211_ATTR_WIPHY]) {
-        QStandardItem *itemChild = new QStandardItem("wiphy");
-        itemProject->appendRow(itemChild);
-        itemProject->setChild(itemChild->index().row(), 1, new QStandardItem(QString::number(nla_get_u32(tb_msg[NL80211_ATTR_WIPHY]))));
-    }
-
-    return NL_SKIP;
+    waitpid(pid, &n, 0);
+    return ((WIFEXITED(n) && WEXITSTATUS(n) == 0));
 }
-*/
+
+/*
+ * search_recursively - 在指定目录及其子目录下查找指定文件
+ *
+ * @dir:指定目录
+ * @filename:指定文件
+ */
+const char *search_recursively(const char *dir, const char *filename)
+{
+    DIR *dp = opendir(dir);
+    if (NULL == dp)
+        return NULL;
+
+    int len = strlen(filename);
+    int lentot = strlen(dir) + 256 + 2;
+    char *curfile = new char[lentot];
+
+    struct dirent *ep;
+    while (NULL != (ep = readdir(dp))) {
+        memset(curfile, 0, lentot);
+        sprintf(curfile, "%s/%s", dir, ep->d_name);
+
+        if (len == (int)strlen(ep->d_name) && !strcmp(ep->d_name, filename)) {
+            closedir(dp);
+            return curfile;
+        }
+
+        struct stat sb;
+        if (0 == lstat(curfile, &sb) && S_ISDIR(sb.st_mode) && !S_ISLNK(sb.st_mode)) {
+            if (strcmp(".", ep->d_name)  && strcmp("..", ep->d_name)) {
+                const char *ret = search_recursively(curfile, filename);
+                if (NULL != ret) {
+                    closedir(dp);
+                    free(curfile);
+                    return curfile;
+                }
+            }
+        }
+    }
+
+    closedir(dp);
+    free(curfile);
+    return NULL;
+}
+
+const char *get_witool_path(const char *tool)
+{
+    const char *re;
+    for (int i = 0; i < g_num_witoolspath; i++) {
+        re = search_recursively(witoolspath[i], tool);
+        if (NULL != re)
+            return re;
+    }
+
+    return NULL;
+}
+
+void hide_cursor(void)
+{
+    char command[13];
+
+    snprintf(command, sizeof(command), "%c[?25l", 0x1B);
+    fprintf(stdout, "%s", command);
+    fflush(stdout);
+}
+
+
+
 
 

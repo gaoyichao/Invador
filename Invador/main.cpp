@@ -3,6 +3,8 @@
 
 #include <iostream>
 
+#include <unistd.h>
+
 #include <netlink/genl/genl.h>
 #include <netlink/genl/family.h>
 #include <netlink/genl/ctrl.h>
@@ -17,6 +19,13 @@
 
 int main(int argc, char *argv[])
 {
+    if (getuid() != 0) {
+        std::cout << "需要root权限!!" << std::endl;
+        return 1;
+    }
+
+
+
     QApplication a(argc, argv);
     MainWindow w;
     w.show();

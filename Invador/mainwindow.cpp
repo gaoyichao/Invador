@@ -3,6 +3,7 @@
 
 #include <QStandardItem>
 #include <QMessageBox>
+#include <QFileDialog>
 
 #include <ByNetEngine.h>
 #include <ByNetDev.h>
@@ -96,51 +97,30 @@ void MainWindow::on_mDevPushButton_4_clicked()
 
 void MainWindow::on_mDevPushButton_5_clicked()
 {
-    m_moninterface = m_engine.FindMonitorInterface();
-    if (NULL == m_moninterface)
-        return;
-
-    //m_moninterface->open();
-    try {
-        m_moninterface->Open();
-
-        int fd_raw = m_moninterface->GetFd();
-        int fdh = 0;
-        if (fd_raw > fdh)
-            fdh = fd_raw;
-
-        fd_set rfds;
-        struct timeval tv0;
-        unsigned char buffer[4096];
-        struct rx_info ri;
-        int read_failed_count = 0;
-
-        while (1) {
-            FD_ZERO(&rfds);
-            FD_SET(fd_raw, &rfds);
-            tv0.tv_sec = 0;
-            tv0.tv_usec = REFRESH_RATE;
-            select(fdh+1, &rfds, NULL, NULL, &tv0);
-
-            if (FD_ISSET(fd_raw, &rfds)) {
-                memset(buffer, 0, sizeof(buffer));
-                int caplen = m_moninterface->Read(buffer, sizeof(buffer), &ri);
-                if (-1 == caplen) {
-                    read_failed_count++;
-                    std::cerr << ">>> Read Failed!!! " << read_failed_count << std::endl;
-                } else {
-                    read_failed_count = 0;
-                    m_moninterface->DumpPacket(buffer, caplen, &ri, NULL);
-                }
-            }
-        }
-    } catch (const char *msg) {
-        QMessageBox::critical(this, "Error", msg);
-        exit(1);
+    if (NULL == m_engine.get_dump_file()) {
+        QString filename = QFileDialog::getSaveFileName(this, "文件另存为", "", tr("Recved Data (*.cap)"));
+        m_engine.init_dump_file(filename.toStdString().c_str());
+        ui->mDevPushButton_5->setText("关闭文件");
+    } else {
+        m_engine.close_dump_file();
+        ui->mDevPushButton_5->setText("打开文件");
     }
+
+
 }
 
-
-
-
-
+void MainWindow::on_mDevPushButton_6_clicked()
+{
+    if (m_engine.is_moniting()) {
+        m_engine.stop_monite();
+        ui->mDevPushButton_6->setText("开始监听");
+    } else {
+        try {
+            m_engine.start_monite();
+            ui->mDevPushButton_6->setText("停止监听");
+        } catch (const char *msg) {
+            QMessageBox::critical(this, "Error", msg);
+            exit(1);
+        }
+    }
+}

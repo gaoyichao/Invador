@@ -1,6 +1,8 @@
 #ifndef BYNETENGINE_H
 #define BYNETENGINE_H
 
+#include <QThread>
+
 #include <net/if.h>
 #include <netlink/genl/genl.h>
 #include <netlink/genl/family.h>
@@ -11,6 +13,7 @@
 #include <nl80211.h>
 #include <iw.h>
 
+#include <stdio.h>
 #include <string>
 #include <map>
 
@@ -29,20 +32,32 @@ typedef int (*ByNetHandler)(ByNetEngine *, struct nl_msg *, void *);
 /*
  * ByNetEngine
  */
-class ByNetEngine
+class ByNetEngine : public QThread
 {
 public:
     ByNetEngine();
     ~ByNetEngine();
+private:
+    void run();
+
+public:
+    void start_monite() { m_moniting = true; this->start(); }
+    void stop_monite() { m_moniting = false; }
+    bool is_moniting() const { return m_moniting; }
+private:
+    bool m_moniting;
 
 public:
     void prepare(enum command_identify_by cidby, signed long long devidx);
     int handle_cmd(int nlm, enum nl80211_commands cmd, ByNetHandler handler, void *arg);
+    void init_dump_file(char const *fname);
+    void close_dump_file();
+    FILE *get_dump_file() { return m_fcap; }
 private:
     struct nl80211_state m_nlstate;
-
     signed long long m_devidx;
     enum command_identify_by m_cidby;
+    FILE *m_fcap;
 
 public:
     std::map<__u32, ByNetDev> & GetDevs() { return m_devs; }

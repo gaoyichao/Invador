@@ -295,6 +295,8 @@ ByNetEngine::ByNetEngine()
     }
 
     m_cidby = CIB_NONE;
+    m_moniting = false;
+    m_fcap = NULL;
 }
 /*
  * BYNetEngine析构函数
@@ -302,6 +304,7 @@ ByNetEngine::ByNetEngine()
 ByNetEngine::~ByNetEngine()
 {
     nl_socket_free(m_nlstate.nl_sock);
+    close_dump_file();
 }
 
 #include <iostream>
@@ -382,6 +385,78 @@ ByNetInterface * ByNetEngine::FindMonitorInterface()
     }
 
     return NULL;
+}
+
+void ByNetEngine::init_dump_file(const char *fname)
+{
+    if (is_moniting())
+        throw "请停止监听再配置文件!!!";
+
+    m_fcap = fopen(fname, "wb+");
+    if (NULL == m_fcap)
+        throw "无法打开*.cap文件";
+
+    struct pcap_file_header pfh;
+    pfh.magic = TCPDUMP_MAGIC;
+    pfh.version_major = PCAP_VERSION_MAJOR;
+    pfh.version_minor = PCAP_VERSION_MINOR;
+    pfh.thiszone = 0;
+    pfh.sigfigs = 0;
+    pfh.snaplen = 65535;
+    pfh.linktype = LINKTYPE_IEEE802_11;
+
+    if (sizeof(pfh) != fwrite(&pfh, 1, sizeof(pfh), m_fcap))
+        throw "写*.cap文件头错误";
+}
+
+void ByNetEngine::close_dump_file()
+{
+    if (NULL != m_fcap)
+        fclose(m_fcap);
+    m_fcap = NULL;
+}
+
+void ByNetEngine::run()
+{
+    ByNetInterface *moninterface = FindMonitorInterface();
+    if (NULL == moninterface)
+        return;
+
+    moninterface->Open();
+
+    int fd_raw = moninterface->GetFd();
+    int fdh = 0;
+    if (fd_raw > fdh)
+        fdh = fd_raw;
+
+    fd_set rfds;
+    struct timeval tv0;
+    unsigned char buffer[4096];
+    struct rx_info ri;
+    int read_failed_count = 0;
+
+    while (is_moniting()) {
+        FD_ZERO(&rfds);
+        FD_SET(fd_raw, &rfds);
+        tv0.tv_sec = 0;
+        tv0.tv_usec = REFRESH_RATE;
+        select(fdh+1, &rfds, NULL, NULL, &tv0);
+
+        if (FD_ISSET(fd_raw, &rfds)) {
+            memset(buffer, 0, sizeof(buffer));
+            int caplen = moninterface->Read(buffer, sizeof(buffer), &ri);
+            if (-1 == caplen) {
+                read_failed_count++;
+                std::cerr << ">>> Read Failed!!! " << read_failed_count << std::endl;
+            } else {
+                read_failed_count = 0;
+                moninterface->DumpPacket(buffer, caplen, &ri, m_fcap);
+            }
+        }
+    }
+
+    if (NULL != m_fcap)
+        fflush(m_fcap);
 }
 
 

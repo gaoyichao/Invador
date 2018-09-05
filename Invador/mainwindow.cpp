@@ -92,6 +92,8 @@ void MainWindow::on_mDevPushButton_4_clicked()
     m_engine.handle_cmd(0, NL80211_CMD_DEL_INTERFACE, handle_interface_del, NULL);
 }
 
+#define REFRESH_RATE 100000
+
 void MainWindow::on_mDevPushButton_5_clicked()
 {
     m_moninterface = m_engine.FindMonitorInterface();
@@ -100,7 +102,38 @@ void MainWindow::on_mDevPushButton_5_clicked()
 
     //m_moninterface->open();
     try {
-        m_moninterface->open();
+        m_moninterface->Open();
+
+        int fd_raw = m_moninterface->GetFd();
+        int fdh = 0;
+        if (fd_raw > fdh)
+            fdh = fd_raw;
+
+        fd_set rfds;
+        struct timeval tv0;
+        unsigned char buffer[4096];
+        struct rx_info ri;
+        int read_failed_count = 0;
+
+        while (1) {
+            FD_ZERO(&rfds);
+            FD_SET(fd_raw, &rfds);
+            tv0.tv_sec = 0;
+            tv0.tv_usec = REFRESH_RATE;
+            select(fdh+1, &rfds, NULL, NULL, &tv0);
+
+            if (FD_ISSET(fd_raw, &rfds)) {
+                memset(buffer, 0, sizeof(buffer));
+                int caplen = m_moninterface->Read(buffer, sizeof(buffer), &ri);
+                if (-1 == caplen) {
+                    read_failed_count++;
+                    std::cerr << ">>> Read Failed!!! " << read_failed_count << std::endl;
+                } else {
+                    read_failed_count = 0;
+                    m_moninterface->DumpPacket(buffer, caplen, &ri, NULL);
+                }
+            }
+        }
     } catch (const char *msg) {
         QMessageBox::critical(this, "Error", msg);
         exit(1);

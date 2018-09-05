@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <crctable_osdep.h>
 
 void print_ssid_escaped(const uint8_t len, const uint8_t *data)
 {
@@ -69,6 +70,32 @@ int ieee80211_frequency_to_channel(int freq)
         return (freq - 56160) / 2160;
     else
         return 0;
+}
+
+
+unsigned long calc_crc_osdep(unsigned char *buf, int len)
+{
+    unsigned long crc = 0xFFFFFFFF;
+
+    for (; len > 0; len--, buf++)
+        crc = crc_tbl_osdep[(crc ^ *buf) & 0xFF] ^ (crc >> 8);
+
+    return (~crc);
+}
+
+/* CRC checksum verification routine */
+
+int check_crc_buf_osdep(unsigned char *buf, int len)
+{
+    unsigned long crc;
+
+    if (len < 0) return 0;
+
+    crc = calc_crc_osdep(buf, len);
+    buf += len;
+    return (((crc) &0xFF) == buf[0] && ((crc >> 8) & 0xFF) == buf[1]
+            && ((crc >> 16) & 0xFF) == buf[2]
+            && ((crc >> 24) & 0xFF) == buf[3]);
 }
 
 

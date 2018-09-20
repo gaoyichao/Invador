@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include <aircrack-ptw-lib.h>
+
 enum driver_type {
     DT_NULL = 0,
     DT_WLANNG,
@@ -228,6 +230,15 @@ struct AP_info
     int marked;
     int marked_color;
     struct WPS_info wps;
+
+    // 新添加
+    int crypt; /* encryption algorithm         */
+    struct ST_info *st_1st; /* linked list of stations      */
+    int eapol; /* set if EAPOL is present      */
+    unsigned char *ivbuf; /* table holding WEP IV data    */
+    struct WPA_hdsk wpa; /* valid WPA handshake data     */
+    PTW_attackstate *ptw_clean;
+    PTW_attackstate *ptw_vague;
 };
 
 /* linked list of detected clients */

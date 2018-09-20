@@ -441,7 +441,7 @@ const unsigned char llcnull[4] = {0, 0, 0, 0};
 
 int ByNetInterface::DumpPacket(unsigned char *buf, int caplen, rx_info *ri, FILE *f_cap)
 {
-    int seq, n, i, type, length, offset, numuni, numauth;
+    int n, i, type, length, offset, numuni, numauth;
     unsigned z;
     struct AP_info *ap_cur;
     struct ST_info *st_cur;
@@ -470,7 +470,7 @@ int ByNetInterface::DumpPacket(unsigned char *buf, int caplen, rx_info *ri, FILE
     }
 
     /* grab the sequence number */
-    seq = (buf[22] >> 4) + (buf[23] << 4);
+    //int seq = (buf[22] >> 4) + (buf[23] << 4);
 
     /* locate the access point's MAC address */
     switch (buf[1] & 3) {

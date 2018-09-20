@@ -15,8 +15,9 @@ INCLUDEPATH += ./iw
 INCLUDEPATH += ./radiotap
 INCLUDEPATH += ./aircrack-util
 INCLUDEPATH += ./aircrack-osdep
+INCLUDEPATH += ./aircrack-crypto
 INCLUDEPATH += ./ByNet
-LIBS += -lnl-genl-3 -lnl-3
+LIBS += -lnl-genl-3 -lnl-3 -ldl -lhwloc -lcrypto
 
 SOURCES += main.cpp\
         mainwindow.cpp \
@@ -29,7 +30,11 @@ SOURCES += main.cpp\
     aircrack-util/common_util.cpp \
     ByNet/ByNetDev.cpp \
     ByNet/ByNetEngine.cpp \
-    ByNet/ByNetInterface.cpp
+    ByNet/ByNetInterface.cpp \
+    aircrack-util/trampoline_x86.cpp \
+    aircrack-util/avl_tree.cpp \
+    aircrack-util/cpuset_hwloc.cpp \
+    ByNet/ByNetCrypto.cpp
 
 
 HEADERS  += mainwindow.h \
@@ -52,6 +57,11 @@ HEADERS  += mainwindow.h \
     aircrack-util/common_util.h \
     ByNet/ByNetDev.h \
     ByNet/ByNetEngine.h \
-    ByNet/ByNetInterface.h
+    ByNet/ByNetInterface.h \
+    aircrack-util/trampoline.h \
+    aircrack-util/avl_tree.h \
+    aircrack-ptw-lib.h \
+    aircrack-util/cpuset.h \
+    ByNet/ByNetCrypto.h
 
 FORMS    += mainwindow.ui

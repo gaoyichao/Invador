@@ -14,6 +14,8 @@
 #include <sys/stat.h>
 #include <crctable_osdep.h>
 
+#include <utils.h>
+
 void print_ssid_escaped(const uint8_t len, const uint8_t *data)
 {
     int i;
@@ -268,6 +270,9 @@ void hide_cursor(void)
     fprintf(stdout, "%s", command);
     fflush(stdout);
 }
+
+
+
 
 
 

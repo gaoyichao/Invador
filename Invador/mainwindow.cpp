@@ -147,35 +147,15 @@ static int station_compare(const void *a, const void *b)
 c_avl_tree_t *access_points = NULL;
 c_avl_tree_t *targets = NULL;
 
-void destroy_ap(struct AP_info *ap)
+void destroy_ap(ByNetApInfo *ap)
 {
     if (0 != ap->ivbuf)
         free(ap->ivbuf);
 
-    while (0 != ap->st_1st) {
-        struct ST_info *st_tmp = ap->st_1st;
-        ap->st_1st = st_tmp->next;
-        free(st_tmp);
-    }
-
-    uniqueiv_wipe(ap->uiv_root);
-
-    if (0 != ap->ptw_clean) {
-        if (0 != ap->ptw_clean->allsessions)
-            free(ap->ptw_clean->allsessions);
-        free(ap->ptw_clean);
-    }
-
-    if (0 != ap->ptw_vague) {
-        if (0 != ap->ptw_vague->allsessions)
-            free(ap->ptw_vague->allsessions);
-        free(ap->ptw_vague);
-    }
-
     free(ap);
 }
 
-struct AP_info *read_cap_file(const char *filename, uint8_t *bssid)
+ByNetApInfo *read_cap_file(const char *filename, uint8_t *bssid)
 {
     int fd = open(filename, O_RDONLY);
     if (fd < 0)
@@ -197,8 +177,8 @@ struct AP_info *read_cap_file(const char *filename, uint8_t *bssid)
 
     uint8_t *buffer = (uint8_t*)malloc(65536);
     unsigned z;
-    struct AP_info *ap_cur = 0;
-    struct ST_info *st_prv, *st_cur;
+    ByNetApInfo *ap_cur = 0;
+    ByNetStInfo *st_cur;
 
     while (1) {
         struct pcap_pkthdr pkh;
@@ -252,15 +232,12 @@ struct AP_info *read_cap_file(const char *filename, uint8_t *bssid)
         if (0 != memcmp(bssid_tmp, bssid, 6))
             continue;
 
-        std::cout << ">>> get bssid" << std::endl;
         int not_found = c_avl_get(access_points, bssid_tmp, (void**)&ap_cur);
         if (not_found) {
-            ap_cur = (struct AP_info*)malloc(sizeof(struct AP_info));
+            ap_cur = new ByNetApInfo(bssid_tmp);
             if (0 == ap_cur)
                 throw "failed to alloc ap_cur";
 
-            memset(ap_cur, 0, sizeof(struct AP_info));
-            memcpy(ap_cur->bssid, bssid_tmp, 6);
             ap_cur->crypt = 3;
 
             c_avl_insert(access_points, bssid_tmp, ap_cur);
@@ -285,30 +262,12 @@ struct AP_info *read_cap_file(const char *filename, uint8_t *bssid)
             break;
         }
 
-        st_prv = NULL;
-        st_cur = ap_cur->st_1st;
-
-        while (NULL != st_cur) {
-            if (!memcmp(st_cur->stmac, stmac, 6))
-                break;
-
-            st_prv = st_cur;
-            st_cur = st_cur->next;
-        }
-
-        if (NULL == st_cur) {
-            if (!(st_cur = (struct ST_info *) malloc(sizeof(struct ST_info))))
-                throw "malloc st_cur failed!";
-
-            memset(st_cur, 0, sizeof(struct ST_info));
-
-            if (NULL == ap_cur->st_1st)
-                ap_cur->st_1st = st_cur;
-            else
-                st_prv->next = st_cur;
-
-            memcpy(st_cur->stmac, stmac, 6);
-        }
+        st_cur = ap_cur->FindStation(stmac);
+        if (!st_cur)
+            st_cur = ap_cur->AddStation(stmac);
+        std::cout << ">>> st_cur" << std::endl;
+        if (!st_cur)
+            throw "malloc st_cur failed!";
 
 skip_station:
         /* packet parsing: Beacon or Probe Response */
@@ -490,7 +449,7 @@ void MainWindow::on_mDevPushButton_7_clicked()
 
         unsigned char __bssid[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
         getmac("02:1A:11:FC:C5:93", 1, __bssid);
-        struct AP_info *ap = read_cap_file("tu-01.cap", __bssid);
+        ByNetApInfo *ap = read_cap_file("tu-04.cap", __bssid);
 
         std::cout << "n ap = " << c_avl_size(access_points) << std::endl;
         std::cout << "n targets = " << c_avl_size(targets) << std::endl;

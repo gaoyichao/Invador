@@ -26,6 +26,9 @@ void ByNetCrypto::SetESSID(const __u8 *essid)
 {
     assert(0 != essid);
 
+    memset(m_eSSID, 0, ByNet_ESSID_LENGTH + 1);
+    m_eSSIDLen = 0;
+
     memccpy(m_eSSID, essid, 0, ByNet_ESSID_LENGTH);
     m_eSSIDLen = strlen((char *)m_eSSID);
 }

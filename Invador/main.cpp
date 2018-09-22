@@ -2,6 +2,7 @@
 #include <QApplication>
 
 #include <iostream>
+#include <string>
 
 #include <unistd.h>
 
@@ -23,7 +24,6 @@ int main(int argc, char *argv[])
         std::cout << "需要root权限!!" << std::endl;
         return 1;
     }
-
 
 
     QApplication a(argc, argv);

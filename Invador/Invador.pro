@@ -34,7 +34,10 @@ SOURCES += main.cpp\
     aircrack-util/trampoline_x86.cpp \
     aircrack-util/avl_tree.cpp \
     aircrack-util/cpuset_hwloc.cpp \
-    ByNet/ByNetCrypto.cpp
+    ByNet/ByNetCrypto.cpp \
+    ByNet/ByNetMacAddr.cpp \
+    ByNet/ByNetApInfo.cpp \
+    ByNet/ByNetStInfo.cpp
 
 
 HEADERS  += mainwindow.h \
@@ -62,6 +65,10 @@ HEADERS  += mainwindow.h \
     aircrack-util/avl_tree.h \
     aircrack-ptw-lib.h \
     aircrack-util/cpuset.h \
-    ByNet/ByNetCrypto.h
+    ByNet/ByNetCrypto.h \
+    ByNet/ByNetMacAddr.h \
+    ByNet/ByNetApInfo.h \
+    ByNet/ByNetTypes.h \
+    ByNet/ByNetStInfo.h
 
 FORMS    += mainwindow.ui

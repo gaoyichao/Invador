@@ -17,8 +17,13 @@
 #include <string>
 #include <map>
 
+
 #include <ByNetDev.h>
 #include <ByNetInterface.h>
+#include <ByNetMacAddr.h>
+#include <ByNetTypes.h>
+#include <ByNetApInfo.h>
+#include <ByNetStInfo.h>
 
 class ByNetEngine;
 
@@ -53,6 +58,22 @@ public:
     void init_dump_file(char const *fname);
     void close_dump_file();
     FILE *get_dump_file() { return m_fcap; }
+
+public:
+    int DumpPacket(unsigned char *buf, int caplen, struct rx_info *ri, FILE *f_cap);
+    ByNetApInfo *ParsePacket(unsigned char *buf, int caplen);
+    void ParseProbeRequest(unsigned char *buf, int caplen, ByNetStInfo *st);
+    void ParseBeaconProbeResponse(unsigned char *buf, int caplen, ByNetApInfo *ap);
+    void ParseAssociationRequest(unsigned char *buf, int caplen, ByNetApInfo *ap);
+    void ParseData(unsigned char *buf, int caplen, ByNetApInfo *ap, ByNetStInfo *st);
+    ByNetApInfo *FindAp(unsigned char *bssid);
+    ByNetApInfo *AddAp(unsigned char *bssid);
+    ByNetStInfo *FindStation(unsigned char *mac);
+    ByNetStInfo *AddStation(unsigned char *mac);
+private:
+    std::map<ByNetMacAddr, ByNetApInfo *> m_ApMap;
+    std::map<ByNetMacAddr, ByNetStInfo *> m_StMap;
+
 private:
     struct nl80211_state m_nlstate;
     signed long long m_devidx;

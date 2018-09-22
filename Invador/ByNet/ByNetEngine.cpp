@@ -297,6 +297,9 @@ ByNetEngine::ByNetEngine()
     m_cidby = CIB_NONE;
     m_moniting = false;
     m_fcap = NULL;
+
+    m_ApMap.clear();
+    m_StMap.clear();
 }
 /*
  * BYNetEngine析构函数
@@ -305,6 +308,16 @@ ByNetEngine::~ByNetEngine()
 {
     nl_socket_free(m_nlstate.nl_sock);
     close_dump_file();
+
+    for (auto it = m_ApMap.begin(); it != m_ApMap.end(); it++) {
+        if (0 != it->second)
+            delete it->second;
+    }
+
+    for (auto it = m_StMap.begin(); it != m_StMap.end(); it++) {
+        if (0 != it->second)
+            delete it->second;
+    }
 }
 
 #include <iostream>
@@ -416,6 +429,396 @@ void ByNetEngine::close_dump_file()
     m_fcap = NULL;
 }
 
+
+#include <aircrack-util/common_util.h>
+#include <aircrack-util/verifyssid.h>
+#include <aircrack-util/mcs_index_rates.h>
+
+#include <stdio.h>
+const unsigned char llcnull[4] = {0, 0, 0, 0};
+#define BROADCAST (unsigned char *) "\xFF\xFF\xFF\xFF\xFF\xFF"
+
+
+ByNetApInfo *ByNetEngine::FindAp(unsigned char *bssid)
+{
+    auto it = m_ApMap.find(bssid);
+    if (m_ApMap.end() != it)
+        return it->second;
+
+    return NULL;
+}
+
+ByNetApInfo *ByNetEngine::AddAp(unsigned char *bssid)
+{
+    ByNetApInfo *ap_cur = new ByNetApInfo(bssid);
+
+    if (0 == ap_cur)
+        throw "ByNetInterface::AddAp malloc failed";
+
+    m_ApMap[bssid] = ap_cur;
+    return ap_cur;
+}
+
+ByNetStInfo *ByNetEngine::FindStation(unsigned char *mac)
+{
+    auto it = m_StMap.find(mac);
+    if (m_StMap.end() != it)
+        return it->second;
+    return NULL;
+}
+
+ByNetStInfo *ByNetEngine::AddStation(unsigned char *mac)
+{
+    //ByNetStInfo *st_cur = new ByNetStInfo(mac);
+    ByNetStInfo *st_cur = (ByNetStInfo*)malloc(sizeof(ByNetStInfo));
+
+    if (0 == st_cur)
+        throw "ByNetInterface::AddStation malloc failed";
+
+    memset(st_cur, 0, sizeof(ByNetStInfo));
+    m_StMap[mac] = st_cur;
+
+    memcpy(st_cur->stmac, mac, 6);
+    st_cur->channel = 0;
+
+    return st_cur;
+}
+
+void ByNetEngine::ParseProbeRequest(unsigned char *buf, int caplen, ByNetStInfo *st)
+{
+    unsigned char *p = buf + 24;
+    unsigned char *bufend = buf + caplen;
+
+    while (p < bufend) {
+        if (p + 2 + p[1] > bufend)
+            break;
+        if (p[0] == 0x00 && p[1] > 0 && p[2] != '\0' && (p[1] > 1 || p[2] != ' ')) {
+            int n = p[1];
+
+            for (int i = 0; i < n; i++) {
+                if (p[2+i] > 0 && p[2+i] < ' ')
+                    return;
+                // todo: probed essid
+            }
+        }
+        p += 2 + p[1];
+    }
+}
+
+void ByNetEngine::ParseBeaconProbeResponse(unsigned char *buf, int caplen, ByNetApInfo *ap)
+{
+    unsigned char *p = buf + 36;
+    unsigned char *bufend = buf + caplen;
+    while (p < bufend) {
+        if (p + 2 + p[1] > bufend)
+            break;
+
+        if (0x00 == p[0] && p[1] > 0 && p[2] != '\0') {
+            /* found a non-cloaked ESSID */
+            int n = (p[1] > 32) ? 32 : p[1];
+            memset(ap->essid, 0, 33);
+            memcpy(ap->essid, p+2, n);
+            //std::cout << "Beacon p[1] = " << n << ":" << ap->essid << std::endl;
+        }
+        p += 2 + p[1];
+    }
+}
+
+void ByNetEngine::ParseAssociationRequest(unsigned char *buf, int caplen, ByNetApInfo *ap)
+{
+    unsigned char *p = buf + 28;
+    unsigned char *bufend = buf + caplen;
+
+    while (p < bufend) {
+        if (p + 2 + p[1] > bufend)
+            break;
+
+        if (p[0] == 0x00 && p[1] > 0 && p[2] != '\0') {
+            int n = (p[1] > 32) ? 32 : p[1];
+
+            memset(ap->essid, 0, 33);
+            memcpy(ap->essid, p + 2, n);
+            //std::cout << "Association Request p[1] = " << p[1];
+            //std::cout << ":" << ap->essid << std::endl;
+        }
+        p += 2 + p[1];
+    }
+}
+
+void ByNetEngine::ParseData(unsigned char *buf, int caplen, ByNetApInfo *ap, ByNetStInfo *st)
+{
+    unsigned z = ((buf[1] & 3) != 3) ? 24 : 30;
+
+    if ((buf[0] & 0x80) == 0x80)
+        z += 2; /* 802.11e QoS */
+    if (z + 16 > caplen)
+        return;
+
+    /* no encryption */
+    if (ap->crypt < 0)
+        ap->crypt = 0;
+
+    z += 6;
+    if (z + 20 < caplen) {
+        if (buf[z] == 0x08 && buf[z + 1] == 0x00 && (buf[1] & 3) == 0x01)
+            memcpy(ap->lanip, &buf[z + 14], 4);
+
+        if (buf[z] == 0x08 && buf[z + 1] == 0x06)
+            memcpy(ap->lanip, &buf[z + 16], 4);
+    }
+    /* check ethertype == EAPOL */
+    if (buf[z] != 0x88 || buf[z + 1] != 0x8E)
+        return;
+    z += 2;
+    ap->eapol = 1;
+
+    /* type == 3 (key), desc. == 254 (WPA) or 2 (RSN) */
+    if (buf[z + 1] != 0x03 || (buf[z + 4] != 0xFE && buf[z + 4] != 0x02))
+        return;
+    ap->eapol = 0;
+    ap->crypt = 3; /* set WPA */
+    if (NULL == st) {
+        return;
+    }
+
+    /* frame 1: Pairwise == 1, Install == 0, Ack == 1, MIC == 0 */
+    if ((buf[z + 6] & 0x08) != 0 && (buf[z + 6] & 0x40) == 0
+        && (buf[z + 6] & 0x80) != 0 && (buf[z + 5] & 0x01) == 0) {
+        memcpy(st->wpa.anonce, &buf[z + 17], 32);
+        /* authenticator nonce set */
+        st->wpa.state = 1;
+    }
+
+    /* frame 2 or 4: Pairwise == 1, Install == 0, Ack == 0, MIC == 1 */
+    if ((buf[z + 6] & 0x08) != 0 && (buf[z + 6] & 0x40) == 0
+        && (buf[z + 6] & 0x80) == 0 && (buf[z + 5] & 0x01) != 0) {
+        if (memcmp(&buf[z + 17], ZERO, 32) != 0) {
+            memcpy(st->wpa.snonce, &buf[z + 17], 32);
+            /* supplicant nonce set */
+            st->wpa.state |= 2;
+        }
+
+        if (4 != (st->wpa.state & 4)) {
+            /* copy the MIC & eapol frame */
+            st->wpa.eapol_size = (buf[z + 2] << 8) + buf[z + 3] + 4;
+            if (st->wpa.eapol_size == 0 || st->wpa.eapol_size > sizeof(st->wpa.eapol) || caplen - z < st->wpa.eapol_size) {
+                // Ignore the packet trying to crash us.
+                st->wpa.eapol_size = 0;
+                return;
+            }
+            memcpy(st->wpa.keymic, &buf[z + 81], 16);
+            memcpy(st->wpa.eapol, &buf[z], st->wpa.eapol_size);
+            memset(st->wpa.eapol + 81, 0, 16);
+            printf(">>> get keymic <<<\n");
+
+            /* eapol frame & keymic set */
+            st->wpa.state |= 4;
+            /* copy the key descriptor version */
+            st->wpa.keyver = buf[z + 6] & 7;
+        }
+    }
+    /* frame 3: Pairwise == 1, Install == 1, Ack == 1, MIC == 1 */
+    if ((buf[z + 6] & 0x08) != 0 && (buf[z + 6] & 0x40) != 0
+        && (buf[z + 6] & 0x80) != 0 && (buf[z + 5] & 0x01) != 0) {
+        if (memcmp(&buf[z + 17], ZERO, 32) != 0) {
+            memcpy(st->wpa.anonce, &buf[z + 17], 32);
+            /* authenticator nonce set */
+            st->wpa.state |= 1;
+        }
+
+        if ((st->wpa.state & 4) != 4) {
+            /* copy the MIC & eapol frame */
+            st->wpa.eapol_size = (buf[z + 2] << 8) + buf[z + 3] + 4;
+
+            if (st->wpa.eapol_size == 0 || st->wpa.eapol_size > sizeof(st->wpa.eapol) || caplen - z < st->wpa.eapol_size) {
+                // Ignore the packet trying to crash us.
+                st->wpa.eapol_size = 0;
+                return;
+            }
+
+            memcpy(st->wpa.keymic, &buf[z + 81], 16);
+            memcpy(st->wpa.eapol, &buf[z], st->wpa.eapol_size);
+            memset(st->wpa.eapol + 81, 0, 16);
+            printf(">>> get keymic <<<\n");
+
+            /* eapol frame & keymic set */
+            st->wpa.state |= 4;
+
+            /* copy the key descriptor version */
+            st->wpa.keyver = buf[z + 6] & 7;
+        }
+    }
+
+    if (st->wpa.state == 7) {
+        /* got one valid handshake */
+        memcpy(&ap->wpa, &st->wpa, sizeof(struct WPA_hdsk));
+        ap->gotwpa = true;
+        printf("WPA handshake: %02X:%02X:%02X:%02X:%02X:%02X\n",
+            ap->bssid[0],
+            ap->bssid[1],
+            ap->bssid[2],
+            ap->bssid[3],
+            ap->bssid[4],
+            ap->bssid[5]);
+    }
+}
+
+ByNetApInfo *ByNetEngine::ParsePacket(unsigned char *buf, int caplen)
+{
+    unsigned char bssid[6];
+    unsigned char stmac[6];
+
+    ByNetApInfo *ap_cur = 0;
+    ByNetStInfo *st_cur = 0;
+    // todo: 主动扫描模式暂未实现
+
+    /* skip packets smaller than a 802.11 header */
+    if (caplen < 24)
+        return 0;
+
+    /* skip (uninteresting) control frames */
+    if (0x04 == (buf[0] & 0x0C))
+        return 0;
+
+    /* if it's a LLC null packet, just forget it (may change in the future) */
+    if (caplen > 128) {
+        if (memcmp(buf + 24, llcnull, 4) == 0)
+            return 0;
+    }
+
+    /* locate the access point's MAC address */
+    switch (buf[1] & 3) {
+    case 0: // Adhoc
+        memcpy(bssid, buf + 16, 6);
+        break;
+    case 1: // ToDS
+        memcpy(bssid, buf + 4, 6);
+        break;
+    case 2: // FromDS
+        memcpy(bssid, buf + 10, 6);
+        break;
+    case 3: // WDS -> Transmitter taken as BSSID
+        memcpy(bssid, buf + 10, 6);
+        break;
+    }
+
+    /* update our chained list of access points */
+    ap_cur = FindAp(bssid);
+    if (NULL == ap_cur)
+        ap_cur = AddAp(bssid);
+    // todo: 更新ap信号强度
+
+    switch (buf[0]) {
+    case 0x80:
+        ap_cur->nb_bcn++;
+        break;
+    case 0x50:
+        /* reset the WPS state */
+        ap_cur->wps.state = 0xFF;
+        ap_cur->wps.ap_setup_locked = 0;
+        break;
+    }
+    ap_cur->nb_pkt++;
+
+    /* locate the station MAC in the 802.11 header */
+    switch (buf[1] & 3) {
+    case 0:
+        /* if management, check that SA != BSSID */
+        if (memcmp(buf + 10, bssid, 6) == 0)
+            goto skip_station;
+        memcpy(stmac, buf + 10, 6);
+        break;
+    case 1:
+        /* ToDS packet, must come from a client */
+        memcpy(stmac, buf + 10, 6);
+        break;
+    case 2:
+        /* FromDS packet, reject broadcast MACs */
+        if ((buf[4] % 2) != 0)
+            goto skip_station;
+        memcpy(stmac, buf + 4, 6);
+        break;
+    default:
+        goto skip_station;
+        break;
+    }
+
+    /* update our chained list of wireless stations */
+    st_cur = FindStation(stmac);
+    if (NULL == st_cur)
+        st_cur = AddStation(stmac);
+    if (st_cur->base == NULL || memcmp(ap_cur->bssid, BROADCAST, 6) != 0)
+        st_cur->base = ap_cur;
+    // todo: 更新station信号强度
+
+skip_station:
+    /*
+    if (buf[0] == 0x40 && st_cur != NULL)
+        ParseProbeRequest(buf, caplen, st_cur);
+     */
+
+    if (buf[0] == 0x80 || buf[0] == 0x50)
+        ParseBeaconProbeResponse(buf, caplen, ap_cur);
+
+    /* packet parsing: Authentication Response */
+    if (buf[0] == 0xB0 && caplen >= 30) {
+        if (ap_cur->security & STD_WEP) {
+            //successful step 2 or 4 (coming from the AP)
+            if (memcmp(buf + 28, "\x00\x00", 2) == 0 && (buf[26] == 0x02 || buf[26] == 0x04)) {
+                ap_cur->security &= ~(AUTH_OPN | AUTH_PSK | AUTH_MGT);
+                if (buf[24] == 0x00)
+                    ap_cur->security |= AUTH_OPN;
+                if (buf[24] == 0x01)
+                    ap_cur->security |= AUTH_PSK;
+            }
+        }
+    }
+
+    if (buf[0] == 0x00 && caplen > 28)
+        ParseAssociationRequest(buf, caplen, ap_cur);
+
+    /* packet parsing: Association Response */
+    if (buf[0] == 0x10) {
+        /* reset the WPA handshake state */
+        if (st_cur != NULL)
+            st_cur->wpa.state = 0;
+        //std::cout << "Reset Response!!!" << std::endl;
+    }
+
+    // packet parsing: some data
+    if ((buf[0] & 0x0C) == 0x08)
+        ParseData(buf, caplen, ap_cur, st_cur);
+
+    return ap_cur;
+}
+
+int ByNetEngine::DumpPacket(unsigned char *buf, int caplen, rx_info *ri, FILE *f_cap)
+{
+    struct pcap_pkthdr pkh;
+    struct timeval tv;
+
+    if (f_cap != NULL && caplen >= 10) {
+
+        gettimeofday(&tv, NULL);
+
+        pkh.caplen = pkh.len = caplen;
+        pkh.tv_sec = tv.tv_sec;
+        pkh.tv_usec = (tv.tv_usec & ~0x1ff) + ri->ri_power + 64;
+
+        int n = sizeof(pkh);
+        if (fwrite(&pkh, 1, n, f_cap) != (size_t) n)
+            throw "fwrite(packet header) failed";
+        fflush(stdout);
+
+        n = pkh.caplen;
+        if (fwrite(buf, 1, n, f_cap) != (size_t) n)
+            perror("fwrite(packet data) failed");
+        fflush(stdout);
+    }
+
+    return 0;
+}
+
 void ByNetEngine::run()
 {
     ByNetInterface *moninterface = FindMonitorInterface();
@@ -450,7 +853,8 @@ void ByNetEngine::run()
                 std::cerr << ">>> Read Failed!!! " << read_failed_count << std::endl;
             } else {
                 read_failed_count = 0;
-                moninterface->DumpPacket(buffer, caplen, &ri, m_fcap);
+                ParsePacket(buffer, caplen);
+                DumpPacket(buffer, caplen, &ri, m_fcap);
             }
         }
     }

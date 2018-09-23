@@ -448,7 +448,7 @@ void MainWindow::on_mDevPushButton_7_clicked()
         targets = c_avl_create(station_compare);
 
         unsigned char __bssid[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-        getmac("02:1A:11:FC:C5:93", 1, __bssid);
+        getmac("02:1A:11:F4:45:FF", 1, __bssid);
         ByNetApInfo *ap = read_cap_file("tu-04.cap", __bssid);
 
         std::cout << "n ap = " << c_avl_size(access_points) << std::endl;

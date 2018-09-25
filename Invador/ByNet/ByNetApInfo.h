@@ -15,7 +15,9 @@ public:
 
 public:
     ByNetStInfo *FindStation(unsigned char *mac);
-    ByNetStInfo *AddStation(unsigned char *mac);
+    ByNetStInfo *AddStation(ByNetStInfo *st);
+
+    ByNetApInfo *Clone() const;
 
 public:
     int security; /* ENC_*, AUTH_*, STD_*     */
@@ -32,7 +34,6 @@ public:
     // 新添加
     int crypt; /* encryption algorithm         */
     int eapol; /* set if EAPOL is present      */
-    unsigned char *ivbuf; /* table holding WEP IV data    */
     struct WPA_hdsk wpa; /* valid WPA handshake data     */
     bool gotwpa;	// 成功捕获WPA握手包
 

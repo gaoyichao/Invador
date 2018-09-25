@@ -147,15 +147,9 @@ static int station_compare(const void *a, const void *b)
 c_avl_tree_t *access_points = NULL;
 c_avl_tree_t *targets = NULL;
 
-void destroy_ap(ByNetApInfo *ap)
-{
-    if (0 != ap->ivbuf)
-        free(ap->ivbuf);
 
-    free(ap);
-}
 
-ByNetApInfo *read_cap_file(const char *filename, uint8_t *bssid)
+ByNetApInfo *MainWindow::read_cap_file(const char *filename, uint8_t *bssid)
 {
     int fd = open(filename, O_RDONLY);
     if (fd < 0)
@@ -232,204 +226,10 @@ ByNetApInfo *read_cap_file(const char *filename, uint8_t *bssid)
         if (0 != memcmp(bssid_tmp, bssid, 6))
             continue;
 
-        int not_found = c_avl_get(access_points, bssid_tmp, (void**)&ap_cur);
-        if (not_found) {
-            ap_cur = new ByNetApInfo(bssid_tmp);
-            if (0 == ap_cur)
-                throw "failed to alloc ap_cur";
+        ap_cur = m_engine.ParsePacket(buffer, pkh.caplen);
 
-            ap_cur->crypt = 3;
-
-            c_avl_insert(access_points, bssid_tmp, ap_cur);
-        }
-
-        st_cur = NULL;
-        switch (h80211[1] & 3) {
-        case 0:
-            memcpy(stmac, h80211 + 10, 6);
-            break;
-        case 1:
-            memcpy(stmac, h80211 + 10, 6);
-            break;
-        case 2:
-            /* reject broadcast MACs */
-            if ((h80211[4] % 2) != 0)
-                goto skip_station;
-            memcpy(stmac, h80211 + 4, 6);
-            break;
-        default:
-            goto skip_station;
-            break;
-        }
-
-        st_cur = ap_cur->FindStation(stmac);
-        if (!st_cur)
-            st_cur = ap_cur->AddStation(stmac);
-        std::cout << ">>> st_cur" << std::endl;
-        if (!st_cur)
-            throw "malloc st_cur failed!";
-
-skip_station:
-        /* packet parsing: Beacon or Probe Response */
-        if (h80211[0] == 0x80 || h80211[0] == 0x50) {
-            p = h80211 + 36;
-            while (p < h80211 + pkh.caplen) {
-                if (p + 2 + p[1] > h80211 + pkh.caplen)
-                    break;
-
-                if (0x00 == p[0] && p[1] > 0 && p[2] != '\0') {
-                    /* found a non-cloaked ESSID */
-                    int n = (p[1] > 32) ? 32 : p[1];
-                    std::cout << "Beacon p[1] = " << n << std::endl;
-                    memset(ap_cur->essid, 0, 33);
-                    memcpy(ap_cur->essid, p+2, n);
-                }
-                p += 2 + p[1];
-            }
-        }
-
-        /* packet parsing: Association Request */
-        if (h80211[0] == 0x00) {
-            p = h80211 + 28;
-
-            while (p < h80211 + pkh.caplen) {
-                if (p + 2 + p[1] > h80211 + pkh.caplen)
-                    break;
-
-                if (p[0] == 0x00 && p[1] > 0 && p[2] != '\0') {
-                    int n = (p[1] > 32) ? 32 : p[1];
-
-                    std::cout << "Association Request p[1] = " << p[1] << std::endl;
-                    memset(ap_cur->essid, 0, 33);
-                    memcpy(ap_cur->essid, p + 2, n);
-                }
-                p += 2 + p[1];
-            }
-        }
-
-        /* packet parsing: Association Response */
-        if (h80211[0] == 0x10) {
-            /* reset the WPA handshake state */
-            if (st_cur != NULL)
-                st_cur->wpa.state = 0;
-            std::cout << "Reset Response!!!" << std::endl;
-        }
-
-        /* check if data */
-        if ((h80211[0] & 0x0C) != 0x08)
-            continue;
-
-        /* check minimum size */
-        z = ((h80211[1] & 3) != 3) ? 24 : 30;
-        if ((h80211[0] & 0x80) == 0x80)
-            z += 2; /* 802.11e QoS */
-        if (z + 16 > pkh.caplen)
-            continue;
-
-        /* no encryption */
-        if (ap_cur->crypt < 0)
-            ap_cur->crypt = 0;
-
-        z += 6;
-        if (z + 20 < pkh.caplen) {
-            if (h80211[z] == 0x08 && h80211[z + 1] == 0x00 && (h80211[1] & 3) == 0x01)
-                memcpy(ap_cur->lanip, &h80211[z + 14], 4);
-
-            if (h80211[z] == 0x08 && h80211[z + 1] == 0x06)
-                memcpy(ap_cur->lanip, &h80211[z + 16], 4);
-        }
-
-        /* check ethertype == EAPOL */
-        if (h80211[z] != 0x88 || h80211[z + 1] != 0x8E)
-            continue;
-        z += 2;
-        ap_cur->eapol = 1;
-
-        /* type == 3 (key), desc. == 254 (WPA) or 2 (RSN) */
-        if (h80211[z + 1] != 0x03 || (h80211[z + 4] != 0xFE && h80211[z + 4] != 0x02))
-            continue;
-        ap_cur->eapol = 0;
-        ap_cur->crypt = 3; /* set WPA */
-        if (NULL == st_cur) {
-            destroy_ap(ap_cur);
-            ap_cur = 0;
-            continue;
-        }
-
-        /* frame 1: Pairwise == 1, Install == 0, Ack == 1, MIC == 0 */
-        if ((h80211[z + 6] & 0x08) != 0 && (h80211[z + 6] & 0x40) == 0
-            && (h80211[z + 6] & 0x80) != 0 && (h80211[z + 5] & 0x01) == 0) {
-            memcpy(st_cur->wpa.anonce, &h80211[z + 17], 32);
-            /* authenticator nonce set */
-            st_cur->wpa.state = 1;
-            std::cout << "frame 1" << std::endl;
-        }
-
-        /* frame 2 or 4: Pairwise == 1, Install == 0, Ack == 0, MIC == 1 */
-        if ((h80211[z + 6] & 0x08) != 0 && (h80211[z + 6] & 0x40) == 0
-            && (h80211[z + 6] & 0x80) == 0 && (h80211[z + 5] & 0x01) != 0) {
-            if (memcmp(&h80211[z + 17], ZERO, 32) != 0) {
-                memcpy(st_cur->wpa.snonce, &h80211[z + 17], 32);
-                /* supplicant nonce set */
-                st_cur->wpa.state |= 2;
-            }
-
-            if (4 != (st_cur->wpa.state & 4)) {
-                /* copy the MIC & eapol frame */
-                st_cur->wpa.eapol_size = (h80211[z + 2] << 8) + h80211[z + 3] + 4;
-                if (st_cur->wpa.eapol_size == 0 || st_cur->wpa.eapol_size > sizeof(st_cur->wpa.eapol) || pkh.len - z < st_cur->wpa.eapol_size)
-                {
-                    // Ignore the packet trying to crash us.
-                    st_cur->wpa.eapol_size = 0;
-                    continue;
-                }
-                memcpy(st_cur->wpa.keymic, &h80211[z + 81], 16);
-                memcpy(st_cur->wpa.eapol, &h80211[z], st_cur->wpa.eapol_size);
-                memset(st_cur->wpa.eapol + 81, 0, 16);
-
-                /* eapol frame & keymic set */
-                st_cur->wpa.state |= 4;
-                /* copy the key descriptor version */
-                st_cur->wpa.keyver = h80211[z + 6] & 7;
-            }
-
-            std::cout << "frame 2 or 4" << std::endl;
-        }
-        /* frame 3: Pairwise == 1, Install == 1, Ack == 1, MIC == 1 */
-        if ((h80211[z + 6] & 0x08) != 0 && (h80211[z + 6] & 0x40) != 0
-            && (h80211[z + 6] & 0x80) != 0 && (h80211[z + 5] & 0x01) != 0) {
-            if (memcmp(&h80211[z + 17], ZERO, 32) != 0) {
-                memcpy(st_cur->wpa.anonce, &h80211[z + 17], 32);
-                /* authenticator nonce set */
-                st_cur->wpa.state |= 1;
-            }
-
-            if ((st_cur->wpa.state & 4) != 4) {
-                /* copy the MIC & eapol frame */
-                st_cur->wpa.eapol_size = (h80211[z + 2] << 8) + h80211[z + 3] + 4;
-
-                if (st_cur->wpa.eapol_size == 0 || st_cur->wpa.eapol_size > sizeof(st_cur->wpa.eapol) || pkh.len - z < st_cur->wpa.eapol_size) {
-                    // Ignore the packet trying to crash us.
-                    st_cur->wpa.eapol_size = 0;
-                    continue;
-                }
-
-                memcpy(st_cur->wpa.keymic, &h80211[z + 81], 16);
-                memcpy(st_cur->wpa.eapol, &h80211[z], st_cur->wpa.eapol_size);
-                memset(st_cur->wpa.eapol + 81, 0, 16);
-
-                /* eapol frame & keymic set */
-                st_cur->wpa.state |= 4;
-
-                /* copy the key descriptor version */
-                st_cur->wpa.keyver = h80211[z + 6] & 7;
-            }
-        }
-
-        if (st_cur->wpa.state == 7) {
+        if (0 != ap_cur && ap_cur->gotwpa) {
             /* got one valid handshake */
-            memcpy(st_cur->wpa.stmac, stmac, 6);
-            memcpy(&ap_cur->wpa, &st_cur->wpa, sizeof(struct WPA_hdsk));
             std::cout << "got one valid handshake" << std::endl;
             break;
         }
@@ -448,7 +248,7 @@ void MainWindow::on_mDevPushButton_7_clicked()
         targets = c_avl_create(station_compare);
 
         unsigned char __bssid[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-        getmac("02:1A:11:F4:45:FF", 1, __bssid);
+        getmac("EC:17:2F:1A:00:52", 1, __bssid);
         ByNetApInfo *ap = read_cap_file("tu-04.cap", __bssid);
 
         std::cout << "n ap = " << c_avl_size(access_points) << std::endl;
@@ -459,6 +259,7 @@ void MainWindow::on_mDevPushButton_7_clicked()
         __u8 mic[20] __attribute__((aligned(32)));
         crypto.SetESSID(ap->essid);
         crypto.CalPke(ap->bssid, ap->wpa.stmac, ap->wpa.anonce, ap->wpa.snonce);
+
         std::string tmp("nuaabuaa");
         crypto.CalPmk((__u8*)tmp.c_str());
         crypto.CalPtk();

@@ -22,6 +22,9 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
+public:
+    ByNetApInfo *read_cap_file(const char *filename, uint8_t *bssid);
+
 private slots:
     void on_mDevPushButton_clicked();
 

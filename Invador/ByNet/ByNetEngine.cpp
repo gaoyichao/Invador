@@ -298,8 +298,7 @@ ByNetEngine::ByNetEngine()
     m_moniting = false;
     m_fcap = NULL;
 
-    m_ApMap.clear();
-    m_StMap.clear();
+    m_CntInfo.Clear();
 }
 /*
  * BYNetEngine析构函数
@@ -308,16 +307,6 @@ ByNetEngine::~ByNetEngine()
 {
     nl_socket_free(m_nlstate.nl_sock);
     close_dump_file();
-
-    for (auto it = m_ApMap.begin(); it != m_ApMap.end(); it++) {
-        if (0 != it->second)
-            delete it->second;
-    }
-
-    for (auto it = m_StMap.begin(); it != m_StMap.end(); it++) {
-        if (0 != it->second)
-            delete it->second;
-    }
 }
 
 #include <iostream>
@@ -429,7 +418,6 @@ void ByNetEngine::close_dump_file()
     m_fcap = NULL;
 }
 
-
 #include <aircrack-util/common_util.h>
 #include <aircrack-util/verifyssid.h>
 #include <aircrack-util/mcs_index_rates.h>
@@ -438,50 +426,10 @@ void ByNetEngine::close_dump_file()
 const unsigned char llcnull[4] = {0, 0, 0, 0};
 #define BROADCAST (unsigned char *) "\xFF\xFF\xFF\xFF\xFF\xFF"
 
-
-ByNetApInfo *ByNetEngine::FindAp(unsigned char *bssid)
+ByNetCntInfo *ByNetEngine::GetCntInfo()
 {
-    auto it = m_ApMap.find(bssid);
-    if (m_ApMap.end() != it)
-        return it->second;
-
-    return NULL;
-}
-
-ByNetApInfo *ByNetEngine::AddAp(unsigned char *bssid)
-{
-    ByNetApInfo *ap_cur = new ByNetApInfo(bssid);
-
-    if (0 == ap_cur)
-        throw "ByNetInterface::AddAp malloc failed";
-
-    m_ApMap[bssid] = ap_cur;
-    return ap_cur;
-}
-
-ByNetStInfo *ByNetEngine::FindStation(unsigned char *mac)
-{
-    auto it = m_StMap.find(mac);
-    if (m_StMap.end() != it)
-        return it->second;
-    return NULL;
-}
-
-ByNetStInfo *ByNetEngine::AddStation(unsigned char *mac)
-{
-    //ByNetStInfo *st_cur = new ByNetStInfo(mac);
-    ByNetStInfo *st_cur = (ByNetStInfo*)malloc(sizeof(ByNetStInfo));
-
-    if (0 == st_cur)
-        throw "ByNetInterface::AddStation malloc failed";
-
-    memset(st_cur, 0, sizeof(ByNetStInfo));
-    m_StMap[mac] = st_cur;
-
-    memcpy(st_cur->stmac, mac, 6);
-    st_cur->channel = 0;
-
-    return st_cur;
+    QReadLocker locker(&m_CntLock);
+    return m_CntInfo.Clone();
 }
 
 void ByNetEngine::ParseProbeRequest(unsigned char *buf, int caplen, ByNetStInfo *st)
@@ -665,6 +613,8 @@ void ByNetEngine::ParseData(unsigned char *buf, int caplen, ByNetApInfo *ap, ByN
 
 ByNetApInfo *ByNetEngine::ParsePacket(unsigned char *buf, int caplen)
 {
+    QWriteLocker locker(&m_CntLock);
+
     unsigned char bssid[6];
     unsigned char stmac[6];
 
@@ -703,9 +653,9 @@ ByNetApInfo *ByNetEngine::ParsePacket(unsigned char *buf, int caplen)
     }
 
     /* update our chained list of access points */
-    ap_cur = FindAp(bssid);
+    ap_cur = m_CntInfo.FindAp(bssid);
     if (NULL == ap_cur)
-        ap_cur = AddAp(bssid);
+        ap_cur = m_CntInfo.AddAp(bssid);
     // todo: 更新ap信号强度
 
     switch (buf[0]) {
@@ -744,11 +694,14 @@ ByNetApInfo *ByNetEngine::ParsePacket(unsigned char *buf, int caplen)
     }
 
     /* update our chained list of wireless stations */
-    st_cur = FindStation(stmac);
-    if (NULL == st_cur)
-        st_cur = AddStation(stmac);
-    if (st_cur->base == NULL || memcmp(ap_cur->bssid, BROADCAST, 6) != 0)
-        st_cur->base = ap_cur;
+    st_cur = m_CntInfo.FindStation(stmac);
+    if (NULL == st_cur) {
+        st_cur = m_CntInfo.AddStation(stmac);
+        memcpy(st_cur->wpa.stmac, stmac, 6);
+    }
+
+    if (!st_cur->IsConnected() || memcmp(ap_cur->bssid, BROADCAST, 6) != 0)
+        st_cur->SetAp(ap_cur);
     // todo: 更新station信号强度
 
 skip_station:
@@ -759,20 +712,6 @@ skip_station:
 
     if (buf[0] == 0x80 || buf[0] == 0x50)
         ParseBeaconProbeResponse(buf, caplen, ap_cur);
-
-    /* packet parsing: Authentication Response */
-    if (buf[0] == 0xB0 && caplen >= 30) {
-        if (ap_cur->security & STD_WEP) {
-            //successful step 2 or 4 (coming from the AP)
-            if (memcmp(buf + 28, "\x00\x00", 2) == 0 && (buf[26] == 0x02 || buf[26] == 0x04)) {
-                ap_cur->security &= ~(AUTH_OPN | AUTH_PSK | AUTH_MGT);
-                if (buf[24] == 0x00)
-                    ap_cur->security |= AUTH_OPN;
-                if (buf[24] == 0x01)
-                    ap_cur->security |= AUTH_PSK;
-            }
-        }
-    }
 
     if (buf[0] == 0x00 && caplen > 28)
         ParseAssociationRequest(buf, caplen, ap_cur);
@@ -789,6 +728,8 @@ skip_station:
     if ((buf[0] & 0x0C) == 0x08)
         ParseData(buf, caplen, ap_cur, st_cur);
 
+    if (ap_cur->gotwpa)
+        std::cout << ">>> ap_cur gotwpa" << std::endl;
     return ap_cur;
 }
 

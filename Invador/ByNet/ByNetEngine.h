@@ -2,6 +2,7 @@
 #define BYNETENGINE_H
 
 #include <QThread>
+#include <QReadWriteLock>
 
 #include <net/if.h>
 #include <netlink/genl/genl.h>
@@ -17,13 +18,13 @@
 #include <string>
 #include <map>
 
-
 #include <ByNetDev.h>
 #include <ByNetInterface.h>
 #include <ByNetMacAddr.h>
 #include <ByNetTypes.h>
 #include <ByNetApInfo.h>
 #include <ByNetStInfo.h>
+#include <ByNetCntInfo.h>
 
 class ByNetEngine;
 
@@ -62,17 +63,15 @@ public:
 public:
     int DumpPacket(unsigned char *buf, int caplen, struct rx_info *ri, FILE *f_cap);
     ByNetApInfo *ParsePacket(unsigned char *buf, int caplen);
+    ByNetCntInfo *GetCntInfo();
+private:
     void ParseProbeRequest(unsigned char *buf, int caplen, ByNetStInfo *st);
     void ParseBeaconProbeResponse(unsigned char *buf, int caplen, ByNetApInfo *ap);
     void ParseAssociationRequest(unsigned char *buf, int caplen, ByNetApInfo *ap);
     void ParseData(unsigned char *buf, int caplen, ByNetApInfo *ap, ByNetStInfo *st);
-    ByNetApInfo *FindAp(unsigned char *bssid);
-    ByNetApInfo *AddAp(unsigned char *bssid);
-    ByNetStInfo *FindStation(unsigned char *mac);
-    ByNetStInfo *AddStation(unsigned char *mac);
 private:
-    std::map<ByNetMacAddr, ByNetApInfo *> m_ApMap;
-    std::map<ByNetMacAddr, ByNetStInfo *> m_StMap;
+    ByNetCntInfo m_CntInfo;
+    QReadWriteLock m_CntLock;
 
 private:
     struct nl80211_state m_nlstate;

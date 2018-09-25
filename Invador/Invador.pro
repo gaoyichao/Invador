@@ -37,7 +37,8 @@ SOURCES += main.cpp\
     ByNet/ByNetCrypto.cpp \
     ByNet/ByNetMacAddr.cpp \
     ByNet/ByNetApInfo.cpp \
-    ByNet/ByNetStInfo.cpp
+    ByNet/ByNetStInfo.cpp \
+    ByNet/ByNetCntInfo.cpp
 
 
 HEADERS  += mainwindow.h \
@@ -69,6 +70,7 @@ HEADERS  += mainwindow.h \
     ByNet/ByNetMacAddr.h \
     ByNet/ByNetApInfo.h \
     ByNet/ByNetTypes.h \
-    ByNet/ByNetStInfo.h
+    ByNet/ByNetStInfo.h \
+    ByNet/ByNetCntInfo.h
 
 FORMS    += mainwindow.ui

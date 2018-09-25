@@ -557,7 +557,6 @@ void ByNetEngine::ParseData(unsigned char *buf, int caplen, ByNetApInfo *ap, ByN
             memcpy(st->wpa.keymic, &buf[z + 81], 16);
             memcpy(st->wpa.eapol, &buf[z], st->wpa.eapol_size);
             memset(st->wpa.eapol + 81, 0, 16);
-            printf(">>> get keymic <<<\n");
 
             /* eapol frame & keymic set */
             st->wpa.state |= 4;
@@ -587,7 +586,6 @@ void ByNetEngine::ParseData(unsigned char *buf, int caplen, ByNetApInfo *ap, ByN
             memcpy(st->wpa.keymic, &buf[z + 81], 16);
             memcpy(st->wpa.eapol, &buf[z], st->wpa.eapol_size);
             memset(st->wpa.eapol + 81, 0, 16);
-            printf(">>> get keymic <<<\n");
 
             /* eapol frame & keymic set */
             st->wpa.state |= 4;
@@ -601,13 +599,6 @@ void ByNetEngine::ParseData(unsigned char *buf, int caplen, ByNetApInfo *ap, ByN
         /* got one valid handshake */
         memcpy(&ap->wpa, &st->wpa, sizeof(struct WPA_hdsk));
         ap->gotwpa = true;
-        printf("WPA handshake: %02X:%02X:%02X:%02X:%02X:%02X\n",
-            ap->bssid[0],
-            ap->bssid[1],
-            ap->bssid[2],
-            ap->bssid[3],
-            ap->bssid[4],
-            ap->bssid[5]);
     }
 }
 
@@ -654,8 +645,10 @@ ByNetApInfo *ByNetEngine::ParsePacket(unsigned char *buf, int caplen)
 
     /* update our chained list of access points */
     ap_cur = m_CntInfo.FindAp(bssid);
-    if (NULL == ap_cur)
+    if (NULL == ap_cur) {
         ap_cur = m_CntInfo.AddAp(bssid);
+        emit FoundNewAp();
+    }
     // todo: 更新ap信号强度
 
     switch (buf[0]) {
@@ -669,6 +662,7 @@ ByNetApInfo *ByNetEngine::ParsePacket(unsigned char *buf, int caplen)
         break;
     }
     ap_cur->nb_pkt++;
+    bool gotwpa = ap_cur->gotwpa;
 
     /* locate the station MAC in the 802.11 header */
     switch (buf[1] & 3) {
@@ -728,8 +722,9 @@ skip_station:
     if ((buf[0] & 0x0C) == 0x08)
         ParseData(buf, caplen, ap_cur, st_cur);
 
-    if (ap_cur->gotwpa)
-        std::cout << ">>> ap_cur gotwpa" << std::endl;
+    if (!gotwpa && ap_cur->gotwpa) {
+        emit WpaCaptured(ap_cur->bssid);
+    }
     return ap_cur;
 }
 

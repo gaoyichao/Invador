@@ -1,6 +1,7 @@
 #ifndef BYNETENGINE_H
 #define BYNETENGINE_H
 
+#include <QObject>
 #include <QThread>
 #include <QReadWriteLock>
 
@@ -40,6 +41,8 @@ typedef int (*ByNetHandler)(ByNetEngine *, struct nl_msg *, void *);
  */
 class ByNetEngine : public QThread
 {
+    Q_OBJECT
+
 public:
     ByNetEngine();
     ~ByNetEngine();
@@ -64,6 +67,11 @@ public:
     int DumpPacket(unsigned char *buf, int caplen, struct rx_info *ri, FILE *f_cap);
     ByNetApInfo *ParsePacket(unsigned char *buf, int caplen);
     ByNetCntInfo *GetCntInfo();
+
+signals:
+    void FoundNewAp();
+    void WpaCaptured(ByNetMacAddr bssid);
+
 private:
     void ParseProbeRequest(unsigned char *buf, int caplen, ByNetStInfo *st);
     void ParseBeaconProbeResponse(unsigned char *buf, int caplen, ByNetApInfo *ap);

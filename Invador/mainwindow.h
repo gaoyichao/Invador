@@ -40,6 +40,10 @@ private slots:
 
     void on_mDevPushButton_7_clicked();
 
+    void mEngine_WpaCaptured(ByNetMacAddr bssid);
+
+    void mEngine_NewAp();
+
 private:
     Ui::MainWindow *ui;
     ByNetEngine m_engine;

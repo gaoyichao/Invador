@@ -26,11 +26,30 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
 
     m_engine.ClearDevs();
+
+    connect(&m_engine, SIGNAL(WpaCaptured(ByNetMacAddr)), this, SLOT(mEngine_WpaCaptured(ByNetMacAddr)));
+    connect(&m_engine, SIGNAL(FoundNewAp()), this, SLOT(mEngine_NewAp()));
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::mEngine_WpaCaptured(ByNetMacAddr bssid)
+{
+    std::cout << "captured wpa:";
+    bssid.Print();
+    std::cout << std::endl;
+}
+
+void MainWindow::mEngine_NewAp()
+{
+    ByNetCntInfo *cnt = m_engine.GetCntInfo();
+
+    std::cout << "num ap:" << cnt->GetApMap().size() << std::endl;
+
+    delete cnt;
 }
 
 void MainWindow::on_mDevPushButton_clicked()

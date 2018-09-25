@@ -15,7 +15,7 @@ public:
 public:
     void Clear();
     ByNetCntInfo *Clone() const;
-    ByNetApInfo *FindAp(unsigned char *bssid);
+    ByNetApInfo *FindAp(const unsigned char *bssid);
     ByNetApInfo *AddAp(unsigned char *bssid);
     ByNetApInfo *AddAp(ByNetApInfo *ap);
 

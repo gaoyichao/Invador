@@ -25,7 +25,7 @@ void ByNetCntInfo::Clear()
     m_StMap.clear();
 }
 
-ByNetApInfo *ByNetCntInfo::FindAp(unsigned char *bssid)
+ByNetApInfo *ByNetCntInfo::FindAp(unsigned char const *bssid)
 {
     auto it = m_ApMap.find(bssid);
     if (m_ApMap.end() != it)

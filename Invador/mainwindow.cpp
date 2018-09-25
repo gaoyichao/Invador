@@ -40,6 +40,26 @@ void MainWindow::mEngine_WpaCaptured(ByNetMacAddr bssid)
 {
     std::cout << "captured wpa:";
     bssid.Print();
+
+    ByNetCntInfo *cnt = m_engine.GetCntInfo();
+    ByNetApInfo *ap = cnt->FindAp(bssid.GetValue());
+
+        ByNetCrypto crypto;
+        __u8 mic[20] __attribute__((aligned(32)));
+        crypto.SetESSID(ap->essid);
+        crypto.CalPke(ap->bssid, ap->wpa.stmac, ap->wpa.anonce, ap->wpa.snonce);
+
+        std::string tmp("nuaabuaa");
+        crypto.CalPmk((__u8*)tmp.c_str());
+        crypto.CalPtk();
+        crypto.CalMic(ap->wpa.eapol, ap->wpa.eapol_size, mic);
+
+        if (0 == memcmp(mic, ap->wpa.keymic, 16))
+            std::cout << "catch you!!" << std::endl;
+
+        std::cout << crypto.GetESSID() << std::endl;
+        std::cout << crypto.GetESSIDLen() << std::endl;
+
     std::cout << std::endl;
 }
 

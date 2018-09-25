@@ -37,6 +37,7 @@ public:
                 m_addr[4], m_addr[5]);
     }
 
+    unsigned char const *GetValue() const { return m_addr; }
 private:
     unsigned char m_addr[6];
 };

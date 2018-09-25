@@ -1,7 +1,11 @@
 # Invador
 
-参考iw配置网卡的monitor模式
+参考iw配置网卡的monitor模式，参考airodump-ng抓包，参考aircrack-ng破解密码。
 
-参考airodump-ng抓包
+主要实现了一个ByNetEngine的类，它有一个线程通过给定的监听模式接口来监听WIFI数据，
+并在每次监听到新的AP和握手包的时候emit一个NewAP和WpaCaptured的signal。
+
+为了保证线程安全，ByNetEngine使用了QReadWriteLock。我们需要通过GetCntInfo来获取监听信息的一个拷贝后，
+在这个拷贝上进行数据处理。
 
 

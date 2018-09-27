@@ -70,6 +70,7 @@ public:
 
 signals:
     void FoundNewAp();
+    void FoundNewSt();
     void WpaCaptured(ByNetMacAddr bssid);
 
 private:

@@ -2,7 +2,25 @@
 
 ByNetApInfo::ByNetApInfo(const unsigned char *bssid)
 {
-    memcpy(this->bssid, bssid, 6);
+    SetBssid(bssid);
+    memset(this->essid, 0, MAX_IE_ELEMENT_SIZE);
+    memset(this->lanip, 0, 4);
+    memset(&this->wps, 0, sizeof(this->wps));
+    memset(&this->wpa, 0, sizeof(this->wpa));
+
+    this->security = 0;
+    this->nb_bcn = 0;
+    this->nb_pkt = 0;
+    this->crypt = 0;
+    this->eapol = 0;
+    this->gotwpa = false;
+
+    m_StMap.clear();
+}
+
+ByNetApInfo::ByNetApInfo(const ByNetMacAddr &bssid)
+{
+    SetBssid(bssid);
     memset(this->essid, 0, MAX_IE_ELEMENT_SIZE);
     memset(this->lanip, 0, 4);
     memset(&this->wps, 0, sizeof(this->wps));
@@ -28,7 +46,7 @@ ByNetApInfo::~ByNetApInfo()
  */
 ByNetApInfo *ByNetApInfo::Clone() const
 {
-    ByNetApInfo *re = new ByNetApInfo(this->bssid);
+    ByNetApInfo *re = new ByNetApInfo(m_bssid);
 
     memcpy(re->essid, this->essid, MAX_IE_ELEMENT_SIZE);
     memcpy(re->lanip, this->lanip, 4);
@@ -55,7 +73,8 @@ ByNetStInfo *ByNetApInfo::FindStation(unsigned char *mac)
 
 ByNetStInfo *ByNetApInfo::AddStation(ByNetStInfo *st)
 {
-    m_StMap[st->stmac] = st;
+    m_StMap[st->GetMacRaw()] = st;
     return st;
 }
+
 

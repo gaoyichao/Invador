@@ -4,6 +4,8 @@
 #include <QStandardItem>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QTableWidget>
+#include <QTableView>
 
 #include <ByNetEngine.h>
 #include <ByNetCrypto.h>
@@ -24,30 +26,50 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    QTableWidget *table = ui->mApTableWidget;
+    table->setColumnCount(4);
+    table->horizontalHeader()->setStretchLastSection(true);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->horizontalHeader()->setFixedHeight(35);
+    QStringList header;
+    header << tr("BSSID") << tr("ESSID") << tr("#Stations") << tr("是否捕获握手包");
+    table->setHorizontalHeaderLabels(header);
+
+    table = ui->mStTableWidget;
+    table->setColumnCount(3);
+    table->horizontalHeader()->setStretchLastSection(true);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->horizontalHeader()->setFixedHeight(35);
+    header.clear();
+    header << tr("MAC") << tr("BSSID") << tr("ESSID");
+    table->setHorizontalHeaderLabels(header);
+
 
     m_engine.ClearDevs();
 
     connect(&m_engine, SIGNAL(WpaCaptured(ByNetMacAddr)), this, SLOT(mEngine_WpaCaptured(ByNetMacAddr)));
-    connect(&m_engine, SIGNAL(FoundNewAp()), this, SLOT(mEngine_NewAp()));
+    connect(&m_engine, SIGNAL(FoundNewAp()), this, SLOT(UpdateCntInfo()));
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+
+    if (NULL != m_cntinfo)
+        delete m_cntinfo;
 }
 
 void MainWindow::mEngine_WpaCaptured(ByNetMacAddr bssid)
 {
-    std::cout << "captured wpa:";
-    bssid.Print();
+    std::cout << "captured wpa:" << bssid.GetStr() << std::endl;
 
-    ByNetCntInfo *cnt = m_engine.GetCntInfo();
-    ByNetApInfo *ap = cnt->FindAp(bssid.GetValue());
+    UpdateCntInfo();
+    ByNetApInfo *ap = m_cntinfo->FindAp(bssid.GetValue());
 
         ByNetCrypto crypto;
         __u8 mic[20] __attribute__((aligned(32)));
         crypto.SetESSID(ap->essid);
-        crypto.CalPke(ap->bssid, ap->wpa.stmac, ap->wpa.anonce, ap->wpa.snonce);
+        crypto.CalPke(ap->GetBssidRaw(), ap->wpa.stmac, ap->wpa.anonce, ap->wpa.snonce);
 
         std::string tmp("nuaabuaa");
         crypto.CalPmk((__u8*)tmp.c_str());
@@ -63,13 +85,70 @@ void MainWindow::mEngine_WpaCaptured(ByNetMacAddr bssid)
     std::cout << std::endl;
 }
 
-void MainWindow::mEngine_NewAp()
+void MainWindow::UpdateCntInfo()
 {
-    ByNetCntInfo *cnt = m_engine.GetCntInfo();
+    if (NULL != m_cntinfo)
+        delete m_cntinfo;
 
-    std::cout << "num ap:" << cnt->GetApMap().size() << std::endl;
+    m_cntinfo = m_engine.GetCntInfo();
 
-    delete cnt;
+    ui->mApTableWidget->clearContents();
+    std::map<ByNetMacAddr, ByNetApInfo *> apmap = m_cntinfo->GetApMap();
+    int i = 0;
+    for (auto it = apmap.begin(); it != apmap.end(); it++) {
+        ui->mApTableWidget->insertRow(i);
+        ByNetApInfo *ap = it->second;
+
+        QTableWidgetItem *item = new QTableWidgetItem(QString(ap->GetBssid().GetStr().c_str()));
+        item->setTextAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+        item->setFlags(item->flags() ^ Qt::ItemIsEditable);
+        ui->mApTableWidget->setItem(i, 0, item);
+
+        item = new QTableWidgetItem((char*)(ap->essid));
+        item->setTextAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+        item->setFlags(item->flags() ^ Qt::ItemIsEditable);
+        ui->mApTableWidget->setItem(i, 1, item);
+
+        item = new QTableWidgetItem(QString::number(ap->NumStation()));
+        item->setTextAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+        item->setFlags(item->flags() ^ Qt::ItemIsEditable);
+        ui->mApTableWidget->setItem(i, 2, item);
+
+        item = new QTableWidgetItem((ap->gotwpa) ? "是" : "否");
+        item->setTextAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+        item->setFlags(item->flags() ^ Qt::ItemIsEditable);
+        ui->mApTableWidget->setItem(i, 3, item);
+
+        i++;
+    }
+
+    ui->mStTableWidget->clearContents();
+    std::map<ByNetMacAddr, ByNetStInfo *> stmap = m_cntinfo->GetStMap();
+    i = 0;
+    for (auto it = stmap.begin(); it != stmap.end(); it++) {
+        ui->mStTableWidget->insertRow(i);
+        ByNetStInfo *st = it->second;
+        ByNetApInfo *ap = st->GetAp();
+        if (0 == ap)
+            continue;
+
+        QTableWidgetItem *item = new QTableWidgetItem(QString(st->GetMac().GetStr().c_str()));
+        item->setTextAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+        item->setFlags(item->flags() ^ Qt::ItemIsEditable);
+        ui->mStTableWidget->setItem(i, 0, item);
+
+        item = new QTableWidgetItem(QString(ap->GetBssid().GetStr().c_str()));
+        item->setTextAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+        item->setFlags(item->flags() ^ Qt::ItemIsEditable);
+        ui->mStTableWidget->setItem(i, 1, item);
+
+        item = new QTableWidgetItem((char*)(ap->essid));
+        item->setTextAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+        item->setFlags(item->flags() ^ Qt::ItemIsEditable);
+        ui->mStTableWidget->setItem(i, 2, item);
+
+        i++;
+    }
 }
 
 void MainWindow::on_mDevPushButton_clicked()
@@ -297,7 +376,7 @@ void MainWindow::on_mDevPushButton_7_clicked()
         ByNetCrypto crypto;
         __u8 mic[20] __attribute__((aligned(32)));
         crypto.SetESSID(ap->essid);
-        crypto.CalPke(ap->bssid, ap->wpa.stmac, ap->wpa.anonce, ap->wpa.snonce);
+        crypto.CalPke(ap->GetBssidRaw(), ap->wpa.stmac, ap->wpa.anonce, ap->wpa.snonce);
 
         std::string tmp("nuaabuaa");
         crypto.CalPmk((__u8*)tmp.c_str());

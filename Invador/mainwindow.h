@@ -42,12 +42,13 @@ private slots:
 
     void mEngine_WpaCaptured(ByNetMacAddr bssid);
 
-    void mEngine_NewAp();
+    void UpdateCntInfo();
 
 private:
     Ui::MainWindow *ui;
     ByNetEngine m_engine;
     ByNetInterface *m_moninterface = NULL;
+    ByNetCntInfo *m_cntinfo = NULL;
 };
 
 #endif // MAINWINDOW_H

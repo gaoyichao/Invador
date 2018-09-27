@@ -692,9 +692,10 @@ ByNetApInfo *ByNetEngine::ParsePacket(unsigned char *buf, int caplen)
     if (NULL == st_cur) {
         st_cur = m_CntInfo.AddStation(stmac);
         memcpy(st_cur->wpa.stmac, stmac, 6);
+        emit FoundNewSt();
     }
 
-    if (!st_cur->IsConnected() || memcmp(ap_cur->bssid, BROADCAST, 6) != 0)
+    if (memcmp(ap_cur->GetBssidRaw(), BROADCAST, 6) != 0)
         st_cur->SetAp(ap_cur);
     // todo: 更新station信号强度
 
@@ -723,7 +724,7 @@ skip_station:
         ParseData(buf, caplen, ap_cur, st_cur);
 
     if (!gotwpa && ap_cur->gotwpa) {
-        emit WpaCaptured(ap_cur->bssid);
+        emit WpaCaptured(ap_cur->GetBssidRaw());
     }
     return ap_cur;
 }

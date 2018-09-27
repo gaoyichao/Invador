@@ -42,7 +42,7 @@ ByNetApInfo *ByNetCntInfo::AddAp(unsigned char *bssid)
 
 ByNetApInfo *ByNetCntInfo::AddAp(ByNetApInfo *ap)
 {
-    m_ApMap[ap->bssid] = ap;
+    m_ApMap[ap->GetBssidRaw()] = ap;
     return ap;
 }
 
@@ -64,7 +64,7 @@ ByNetStInfo *ByNetCntInfo::AddStation(unsigned char *mac)
 
 ByNetStInfo *ByNetCntInfo::AddStation(ByNetStInfo *st)
 {
-    m_StMap[st->stmac] = st;
+    m_StMap[st->GetMacRaw()] = st;
     return st;
 }
 
@@ -81,9 +81,11 @@ ByNetCntInfo *ByNetCntInfo::Clone() const
         ByNetStInfo *dst = re->AddStation(src->Clone());
 
         if (src->IsConnected()) {
-            ByNetApInfo *ap = re->FindAp(src->GetAp()->bssid);
+            ByNetApInfo *ap = re->FindAp(src->GetAp()->GetBssidRaw());
             dst->SetAp(ap);
             ap->AddStation(dst);
+        } else {
+            dst->SetAp(0);
         }
     }
 

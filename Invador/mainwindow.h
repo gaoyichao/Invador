@@ -19,21 +19,13 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = 0);
+    explicit MainWindow(ByNetEngine &engine, QWidget *parent = 0);
     ~MainWindow();
 
 public:
     ByNetApInfo *read_cap_file(const char *filename, uint8_t *bssid);
 
 private slots:
-    void on_mDevPushButton_clicked();
-
-    void on_mDevPushButton_2_clicked();
-
-    void on_mDevPushButton_3_clicked();
-
-    void on_mDevPushButton_4_clicked();
-
     void on_mDevPushButton_5_clicked();
 
     void on_mDevPushButton_6_clicked();
@@ -46,7 +38,7 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
-    ByNetEngine m_engine;
+    ByNetEngine &m_engine;
     ByNetInterface *m_moninterface = NULL;
     ByNetCntInfo *m_cntinfo = NULL;
 };

@@ -25,10 +25,12 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    ByNetEngine engine;
 
     QApplication a(argc, argv);
-    MainWindow w;
+    MainWindow w(engine);
     w.show();
+    int re = a.exec();
 
-    return a.exec();
+    return re;
 }

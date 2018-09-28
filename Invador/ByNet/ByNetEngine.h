@@ -93,7 +93,10 @@ public:
     std::map<__u32, ByNetDev> const & GetDevs() const { return m_devs; }
     void ClearDevs() { m_devs.clear(); }
 
+    bool DelInterface(char const *ifname);
     ByNetInterface * FindMonitorInterface();
+    ByNetInterface * FindInterface(char const *ifname);
+    ByNetInterface * AddInterface(char const *ifname);
     std::map<__u32, ByNetDev> & UpdateDevs();
 private:
     std::map<__u32, ByNetDev> m_devs;

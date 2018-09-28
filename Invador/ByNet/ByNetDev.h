@@ -60,6 +60,18 @@ public:
         return monitor;
     }
 
+    ByNetInterface * FindInterface(char const *ifname) {
+        ByNetInterface *interface = NULL;
+        for (auto it = m_interfaces.begin(); it != m_interfaces.end(); it++) {
+            ByNetInterface &tmp = it->second;
+            if (0 == strcmp(ifname, tmp.GetIfName().c_str())) {
+                interface = &(it->second);
+                break;
+            }
+        }
+        return interface;
+    }
+
 private:
     std::map<__u32, ByNetInterface> m_interfaces;
 

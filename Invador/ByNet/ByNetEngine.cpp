@@ -255,9 +255,10 @@ int handle_info(ByNetEngine *engine, struct nl_msg *msg, void *arg)
     return 0;
 }
 
+std::string gMoniString("moni0");
 int handle_interface_add(ByNetEngine *engine, struct nl_msg *msg, void *arg)
 {
-    NLA_PUT_STRING(msg, NL80211_ATTR_IFNAME, "moni0");
+    NLA_PUT_STRING(msg, NL80211_ATTR_IFNAME, gMoniString.c_str());
     NLA_PUT_U32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MONITOR);
     return 0;
 nla_put_failure:
@@ -387,6 +388,50 @@ ByNetInterface * ByNetEngine::FindMonitorInterface()
     }
 
     return NULL;
+}
+
+ByNetInterface * ByNetEngine::FindInterface(const char *ifname)
+{
+    ByNetInterface *interface = NULL;
+
+    UpdateDevs();
+    for (auto it = m_devs.begin(); it != m_devs.end(); it++) {
+        ByNetDev *dev = &(it->second);
+        interface = dev->FindInterface(ifname);
+        if (NULL != interface)
+            return interface;
+    }
+    return NULL;
+}
+
+ByNetInterface *ByNetEngine::AddInterface(const char *ifname)
+{
+    ByNetInterface *interface = FindInterface(ifname);
+
+    if (NULL == interface) {
+        gMoniString.clear();
+        gMoniString.append(ifname);
+
+        prepare(CIB_PHY, 0);
+        handle_cmd(0, NL80211_CMD_NEW_INTERFACE, handle_interface_add, NULL);
+
+        interface = FindInterface(ifname);
+    }
+
+    return interface;
+}
+
+bool ByNetEngine::DelInterface(const char *ifname)
+{
+    signed long long devidx = if_nametoindex(ifname);
+
+    if (devidx < 0)
+        return false;
+
+    prepare(CIB_NETDEV, devidx);
+    handle_cmd(0, NL80211_CMD_DEL_INTERFACE, handle_interface_del, NULL);
+
+    return true;
 }
 
 void ByNetEngine::init_dump_file(const char *fname)
